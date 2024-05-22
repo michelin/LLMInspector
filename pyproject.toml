@@ -1,0 +1,105 @@
+[project]
+name = "llm_inspector"
+version = "0.1.0"
+description = "Python package for end to end LLM evaluation."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "ragas==0.1.6", 
+    "pandas==2.2.1", 
+    "llama-index==0.10.26",
+    "llama-index-llms-azure-openai==0.1.5",
+    "llama-index-embeddings-azure-openai==0.1.6", 
+    "langchain==0.1.14",
+    "langchain-openai==0.1.1", 
+    "python-dotenv==1.0.1",
+    "pytest-playwright==0.4.4", 
+    "rouge==1.0.1", 
+    "evaluate==0.4.1",
+    "presidio-analyzer==2.2.354",
+    "deep-translator==1.11.4", 
+    "nltk==3.8.1", 
+    "checklist==0.0.11", 
+    "textstat==0.7.3", 
+    "openpyxl==3.1.2", 
+    "docx2txt==0.8", 
+    "langdetect==1.0.9", 
+    "bert-score==0.3.13",
+]
+classifiers = [
+    "License :: Other/Proprietary License",
+    "Programming Language :: Python :: 3",
+    "Private :: Do Not Upload",
+]
+
+[build-system]
+requires = ["pydnx_packaging", "setuptools>=60", "wheel"]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "pylint",
+    "pytest",
+    "pytest-cov",
+    "pytest-html",
+    "sphinx",
+    "sphinx-copybutton",
+]
+
+setup = [
+    "pydnx_packaging",
+    "setuptools>=60",
+    "sphinx",
+    "sphinx-copybutton",
+    "urllib3",
+    "wheel",
+]
+
+[tool.setuptools.packages.find]
+
+## DEV TOOLS
+## pylint
+[tool.pylint.reports]
+output-format = "colorized"
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.pylint."messages control"]
+disable = [
+    "logging-fstring-interpolation", # https://github.com/PyCQA/pylint/issues/2395
+    "too-few-public-methods",
+    "too-many-ancestors",
+    "too-many-arguments",
+    "too-many-instance-attributes",
+    "too-many-locals",
+    "too-many-public-methods",
+]
+
+## isort
+[tool.isort]
+profile = "black"
+balanced_wrapping = true
+line_length = 88
+multi_line_output = 3
+use_parentheses = true
+include_trailing_comma = true
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+skip_glob = ["venv", ".venv"]
+
+## pytest
+[tool.pytest.ini_options]
+# addopts = "--cov-branch"
+
+## coverage
+[tool.coverage.run]
+branch = true
+omit = [
+    "setup.py",
+    "venv",
+    "docs/**",
+    "public/**",
+    "llm_inspector/tests/**",
+    "llm_inspector/version.py",
+]

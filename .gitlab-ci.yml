@@ -1,0 +1,62 @@
+# You can override the included template(s) by including variable overrides
+# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
+# Secret Detection customization: https://docs.gitlab.com/ee/user/application_security/secret_detection/#customizing-settings
+# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
+# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
+# Note that environment variables can be set in several places
+# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
+variables:
+  GIT_STRATEGY: clone
+  SONAR_SCANNER_OPTIONS: "-Dsonar.python.coverage.reportPaths=public/coverage.xml
+    -Dsonar.coverage.exclusions=public/**,docs/**,**/tests/**,setup.py -Dsonar.exclusions=public/**,docs/**"
+  PYTHON_MAIN_REPOSITORY_NAME: llm_inspector
+include:
+- project: dord/infra/central-ci-cd/ci-cd
+  file:
+  - global-settings.yml
+  - jobs-linter/python.yml
+  - jobs-tester/pytest.yml
+  - jobs-pages/sphinx.yml
+  - jobs-builder/wheel.yml
+  - jobs-pusher/wheel.yml
+  - jobs-tester/sonarqube.yml
+- template: Security/SAST.gitlab-ci.yml
+pythoncheck:
+  needs: []
+wheel:
+  needs: []
+pytest:
+  needs: []
+  parallel:
+    matrix:
+    - PYTHON_VERSION: '3.9'
+      MAIN_VERSION: 'true'
+    - PYTHON_VERSION:
+      - '3.12'
+      MAIN_VERSION: 'false'
+  rules:
+  - if: $MAIN_VERSION == "true"
+    allow_failure: false
+  - if: $MAIN_VERSION == "false"
+    allow_failure: true
+pages:
+  needs:
+  - pythoncheck
+  - wheel
+  - pytest
+  rules:
+  - if: "$CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH"
+    when: always
+  - when: never
+wheelpush:
+  needs:
+  - pythoncheck
+  - wheel
+  - pytest
+  rules:
+  - if: "$CI_COMMIT_TAG != null"
+    when: on_success
+stages:
+- test
+sast:
+  stage: test
