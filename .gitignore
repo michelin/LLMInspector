@@ -9,6 +9,14 @@ __pycache__/
 .env
 rag_req.txt
 test.ipynb
+demo.py
+dev_config.ini
+/input
+/output
+/dataset
+.amlignore.amltmp
+.amlignore
+
 # Distribution / packaging
 .Python
 build/

@@ -1,4 +1,3 @@
-# from langchain_community.document_loaders import DirectoryLoader
 from langchain_openai.chat_models import AzureChatOpenAI
 from langchain_openai.embeddings import AzureOpenAIEmbeddings
 
@@ -68,16 +67,14 @@ class RagEval:
         """
         dotenv_path = Path(env_path)
         load_dotenv(dotenv_path=dotenv_path)
-        # Config = ConfigParser()
-        # Config.read(config_path)
-        self.RAG_File = config["RAG_File"]
+        self.rag_file = config["RAG_File"]
         self.api_version = os.getenv("api_version")
         self.azure_endpoint = os.getenv("azure_endpoint")
         self.api_key = os.getenv("api_key")
-        self.input_dir = self.RAG_File["RAG_testset_input_directory"]
-        self.testset_filename = self.RAG_File["RAG_testset_input_filename"]
-        self.file_dir = self.RAG_File["RAG_testset_document_directory"]
-        self.output_dir = self.RAG_File["RAG_output_directory"]
+        self.input_dir = self.rag_file["RAG_testset_input_directory"]
+        self.testset_filename = self.rag_file["RAG_testset_input_filename"]
+        self.file_dir = self.rag_file["RAG_testset_document_directory"]
+        self.output_dir = self.rag_file["RAG_output_directory"]
         self.azure_model = None
         self.azure_embeddings = None
         self.loader = None
@@ -116,12 +113,6 @@ class RagEval:
         """
         Loads documents for evaluation.
         """
-        # self.loader = DirectoryLoader(self.input_dir, use_multithreading=True, silent_errors=True, sample_size=1)
-        # self.documents = self.loader.load()
-
-        # self.documents = [doc[0] for doc in self.documents]
-        # for document in self.documents:
-        #         document.metadata['filename'] = document.metadata['source']
         self.documents = SimpleDirectoryReader(
             self.file_dir,
             recursive=True,
@@ -137,7 +128,7 @@ class RagEval:
         Returns:
             DataFrame: Generated test set.
         """
-        test_size = int(self.RAG_File["testset_size"])
+        test_size = int(self.rag_file["testset_size"])
         print("initialising models")
         self.initialize_models()
         print("loading documents")
@@ -205,7 +196,7 @@ class RagEval:
         try:
             dt_time = datetime.datetime.now()
             filename = (
-                self.RAG_File["RAG_testset_Output_fileName"]
+                self.rag_file["RAG_testset_Output_fileName"]
                 + f"{dt_time.month}{dt_time.day}_{dt_time.hour}{dt_time.minute}.xlsx"
             )
             file_path = self.output_dir + filename
@@ -220,7 +211,7 @@ class RagEval:
         try:
             dt_time = datetime.datetime.now()
             filename = (
-                self.RAG_File["RAG_eval_Output_fileName"]
+                self.rag_file["RAG_eval_Output_fileName"]
                 + f"{dt_time.month}{dt_time.day}_{dt_time.hour}{dt_time.minute}.xlsx"
             )
             file_path = self.output_dir + filename
