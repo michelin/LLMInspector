@@ -33,21 +33,19 @@ class EvalMetrics:
         self.api_version = os.getenv("api_version")
         self.azure_endpoint = os.getenv("azure_endpoint")
         self.api_key = os.getenv("api_key")
-        # config = ConfigParser()
-        # config.read(config_path)
         self.initialize_models()
-        Insight_File = config["Insights_File"]
+        insight_file = config["Insights_File"]
         dt_time = datetime.datetime.now()
-        self.question_col = Insight_File["question_col"]
-        self.answer_col = Insight_File["answer_col"]
-        self.ground_truth_col = Insight_File["ground_truth_col"]
-        self.threshold = float(Insight_File["threshold"])
+        self.question_col = insight_file["question_col"]
+        self.answer_col = insight_file["answer_col"]
+        self.ground_truth_col = insight_file["ground_truth_col"]
+        self.threshold = float(insight_file["threshold"])
         self.df = df
         self.result_df = df
-        self.output_lang = Insight_File["output_lang"]
+        self.output_lang = insight_file["output_lang"]
         self.output_path = (
-            Insight_File["Insights_output_path"]
-            + Insight_File["Insights_Output_fileName"]
+            insight_file["Insights_output_path"]
+            + insight_file["Insights_Output_fileName"]
             + "_"
             + str(dt_time.year)
             + str(dt_time.month)
@@ -57,8 +55,8 @@ class EvalMetrics:
             + str(dt_time.minute)
             + ".xlsx"
         )
-        self.Ins_output = out_dir if out_dir is not None else self.output_path
-        self.metrics_list = Insight_File["Metrics"]
+        self.ins_output = out_dir if out_dir is not None else self.output_path
+        self.metrics_list = insight_file["Metrics"]
         self.metrics_list = eval(self.metrics_list)
         if len(self.metrics_list) == 0:
             self.metrics_list = [
@@ -146,7 +144,7 @@ class EvalMetrics:
             self.result_df["answer toxicity"] = answer_toxicity
             print("answer toxicity done")
         if "pii_detection" in self.metrics_list:
-            pii_detection = self.PII_detection(self.df[self.answer_col].to_list())
+            pii_detection = self.pii_detection(self.df[self.answer_col].to_list())
             self.result_df["PII"] = pii_detection
             print("pii detection done")
         if "readability" in self.metrics_list:
@@ -198,7 +196,6 @@ class EvalMetrics:
             self.result_df["answer_emotion"] = answer_emotion
             print("answer emotion done")
         if "bert_score" in self.metrics_list:
-            bertscore = self.df["bertscore"].to_list()
             self.df["Result"] = self.df["bertscore"].apply(
                 lambda x: "Pass" if x > self.threshold else "Fail"
             )
@@ -237,7 +234,7 @@ class EvalMetrics:
         results = [i["label"] for i in results]
         return results
 
-    def PII_detection(self, texts):
+    def pii_detection(self, texts):
         analyzer = AnalyzerEngine()
         entities = [
             "CREDIT_CARD",
@@ -336,6 +333,6 @@ class EvalMetrics:
         return df["answer_correctness"].to_list()
 
     def export_insights(self):
-        print("Insights can be obtained on the provided path:", self.Ins_output)
-        self.result_df.to_excel(self.Ins_output)
+        print("Insights can be obtained on the provided path:", self.ins_output)
+        self.result_df.to_excel(self.ins_output)
         return self.result_df

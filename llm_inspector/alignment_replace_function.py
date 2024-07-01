@@ -7,8 +7,7 @@ class tag_replace:
         key_tag_lower = keyword.lower()
 
         for sentence in sentences:
-            if key_tag_lower in sentence.lower():
-                if key_tag_lower in map(str.lower, keyword_dict.keys()):
+            if key_tag_lower in sentence.lower() and key_tag_lower in map(str.lower, keyword_dict.keys()):
                     lst = [sentence]
                     keyword_dict_lower = self.convert_keys_to_lower(keyword_dict)
                     for replacement in keyword_dict_lower.get(key_tag_lower, []):
