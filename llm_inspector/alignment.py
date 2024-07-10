@@ -26,34 +26,38 @@ for k, v in ocr_typo_dict.items():
     inverted_ocr_typo_dict[v].append(k)
 
 
+class KeywordNotFoundException(Exception):
+    def __init__(self, tag_value, message="Keyword not found in the config File"):
+        self.tag_value = tag_value
+        self.message = message
+        super().__init__(f"{message}: {tag_value}")
+
+
 class Alignment:
 
     def __init__(
         self,
-        Config,
-        inputFile=None,
-        outFilePath=None,
+        config,
+        inputfile=None,
+        outfilepath=None,
         capability=None,
-        subCapability=None,
+        subcapability=None,
     ):
-        # Config = ConfigParser()
-        # Config.read(config_path)
-        self.tag_file_path = Config["Alignment_File"]
-        self.Tag_Augmentation = Config["Tag_Augmentation_Key"]
-        self.Augmentation_Type = Config["Augmentation_Type"]
+        self.tag_file_path = config["Alignment_File"]
+        self.tag_augmentation = config["Tag_Augmentation_Key"]
+        self.augmentation_type = config["Augmentation_Type"]
         dt_time = datetime.datetime.now()
         augmentations = ast.literal_eval(self.tag_file_path["augmentations"])
 
-        self.inFile = (
+        self.infile = (
             self.tag_file_path["Alignment_input_FilePath"]
             + self.tag_file_path["Alignment_GoldenDataset_FileName"]
         )
-        self.inputFile = inputFile if inputFile is not None else self.inFile
+        self.inputfile = inputfile if inputfile is not None else self.infile
 
-        alignment_df = pd.read_excel(self.inputFile)
+        alignment_df = pd.read_excel(self.inputfile)
         self.alignment_df1 = alignment_df
 
-        # self.outPath = os.path.join(sys.path[0], 'Output')
         self.output_path = (
             self.tag_file_path["Alignment_output_path"]
             + self.tag_file_path["Alignment_Output_fileName"]
@@ -66,7 +70,7 @@ class Alignment:
             + ".xlsx"
         )
         self.align_output_path = (
-            outFilePath if outFilePath is not None else self.output_path
+            outfilepath if outfilepath is not None else self.output_path
         )
 
         if capability is not None:
@@ -74,33 +78,31 @@ class Alignment:
         else:
             self.capability = []
 
-        if subCapability is not None:
-            self.subCapability = subCapability
+        if subcapability is not None:
+            self.subcapability = subcapability
         else:
-            self.subCapability = []
+            self.subcapability = []
 
         self.editor = Editor()  # Initializing Checklist
 
         self.augmentations = augmentations
-        # print("augmentations", self.augmentations)
         self.result_pertubated_df = pd.DataFrame()
 
         self.exploded_prompt = []
-        self.augmentation_type = []
+        self.augmentation_type_list1 = []
         self.input_prompt = []
-        self.Expected_Response = []
+        self.expected_response = []
         self.exploded_prompt1 = []
         self.augmentation_type1 = []
         self.input_prompt1 = []
-        self.Expected_Response1 = []
+        self.expected_response1 = []
 
-    def CheckList_TagAugmentation(self):
-        alignment_df1 = self.alignment_df1
-        keyword_dict = ast.literal_eval(self.Tag_Augmentation["tag_keyword_dict"])
+    def checklist_tagaugmentation(self):
+        keyword_dict = ast.literal_eval(self.tag_augmentation["tag_keyword_dict"])
         tag_key_list = list(keyword_dict)
 
         augmentation_dict = ast.literal_eval(
-            self.Augmentation_Type["augmentation_dict"]
+            self.augmentation_type["augmentation_dict"]
         )
         aug_value = augmentation_dict.values()
 
@@ -111,14 +113,14 @@ class Alignment:
         )
         self.editor = Editor()
 
-        Input_tags = self.alignment_df1["Tags"].replace("", np.nan).dropna()
-        Input_tags = [item.lower() for item in Input_tags]
+        input_tags = self.alignment_df1["Tags"].replace("", np.nan).dropna()
+        input_tags = [item.lower() for item in input_tags]
 
-        tag_list_inFile = []
-        lexicon_key_inFile = []
+        tag_list_infile = []
+        lexicon_key_infile = []
 
-        Tag_List = [item.strip("{}").lower() for item in tag_key_list]
-        Lexicon_Key_list = [
+        tag_list = [item.strip("{}").lower() for item in tag_key_list]
+        lexicon_key_list = [
             "country",
             "city",
             "nationality",
@@ -127,24 +129,24 @@ class Alignment:
             "sexual_adj",
         ]
 
-        for tag in Input_tags:
-            if tag in Tag_List:
-                tag_list_inFile.append(tag)
+        for tag in input_tags:
+            if tag in tag_list:
+                tag_list_infile.append(tag)
 
-        for tag in Input_tags:
-            if tag in Lexicon_Key_list:
-                lexicon_key_inFile.append(tag)
+        for tag in input_tags:
+            if tag in lexicon_key_list:
+                lexicon_key_infile.append(tag)
 
-        tag_key_list = set(tag_list_inFile)
-        unique_tag_list_inFile = list(tag_key_list)
-        print("Tag key found in the file : ", unique_tag_list_inFile)
+        tag_key_list = set(tag_list_infile)
+        unique_tag_list_infile = list(tag_key_list)
+        print("Tag key found in the file : ", unique_tag_list_infile)
 
-        lexicon_key_list = set(lexicon_key_inFile)
+        lexicon_key_list = set(lexicon_key_infile)
         unique_lexicon_key_inFile = list(lexicon_key_list)
         print("Lexicon key found in the file : ", unique_lexicon_key_inFile)
 
         # For Loop for Pertubating data with given Tags as part of Tag List
-        for tag_key in unique_tag_list_inFile:
+        for tag_key in unique_tag_list_infile:
             for aug_key, aug_value in augmentation_dict.items():
                 if tag_key.lower() in [value.lower() for value in aug_value]:
                     tag_value = "{" + tag_key + "}"
@@ -162,11 +164,11 @@ class Alignment:
                     ].to_list()
 
                     for i in self.exploded_prompt:
-                        if i not in selected_input_prompt_list:
-                            if re.search(tag_value, i, re.IGNORECASE):
-                                input_prompt_list.append(i)
+                        if i not in selected_input_prompt_list and re.search(tag_value, i, re.IGNORECASE):
+                            input_prompt_list.append(i)
 
                     modified_input_prompt = []
+                    
                     try:
                         modified_input_prompt = align_replace_tag.replace_tag(
                             selected_input_prompt_list, tag_value, keyword_dict
@@ -176,20 +178,18 @@ class Alignment:
                             for t in range(len(a)):
                                 for n in range(len(a[t])):
                                     self.input_prompt.append(a[t][0])
-                                    self.Expected_Response.extend(
+                                    self.expected_response.extend(
                                         selected_input_prompt["Expected_Result"]
                                     )
-                                    self.augmentation_type.append(
+                                    self.augmentation_type_list1.append(
                                         "Different " + str(aug_key)
                                     )
                                     self.exploded_prompt.append(a[t][n])
                         else:
-                            raise Exception(
-                                tag_value, "Keyword not found in the Config File"
-                            )
+                            raise KeywordNotFoundException(tag_value)
 
-                    except Exception as e:
-                        print("Error : ", e)
+                    except KeywordNotFoundException as e:
+                        print("Error:", e)
 
         for lexicon_key in unique_lexicon_key_inFile:
             key_value = "{" + lexicon_key + "}"
@@ -201,9 +201,8 @@ class Alignment:
             selected_input_prompt_list = selected_input_prompt["UserInput"].to_list()
 
             for i in self.exploded_prompt:
-                if i not in selected_input_prompt_list:
-                    if re.search(key_value, i, re.IGNORECASE):
-                        input_prompt_list.append(i)
+                if i not in selected_input_prompt_list and re.search(key_value, i, re.IGNORECASE):
+                    input_prompt_list.append(i)
 
             replaced_prompt_list = []
             replaced_prompt_list = selected_input_prompt_list + input_prompt_list
@@ -215,17 +214,17 @@ class Alignment:
                 modified_input_prompt = ret.data[0:5]
                 for n in range(len(modified_input_prompt)):
                     self.input_prompt.append(replaced_prompt_list[j])
-                    self.Expected_Response.extend(
+                    self.expected_response.extend(
                         selected_input_prompt["Expected_Result"]
                     )
-                    self.augmentation_type.append(
+                    self.augmentation_type_list1.append(
                         "Checklist Lexicon Keys_" + str(lexicon_key)
                     )
                     # self.self.augmentation_type.append(self.self.augmentation_type[y])
                     self.exploded_prompt.append(modified_input_prompt[n])
 
     def alignment_data(self):
-        self.CheckList_TagAugmentation()
+        self.checklist_tagaugmentation()
 
         for t in range(len(self.alignment_df1["UserInput"])):
             if "{" not in self.alignment_df1["UserInput"][t]:
@@ -233,21 +232,20 @@ class Alignment:
                 self.exploded_prompt1.append(self.alignment_df1["UserInput"][t])
                 self.input_prompt1.append(self.alignment_df1["UserInput"][t])
                 self.augmentation_type1.append("None")
-                self.Expected_Response1.append(self.alignment_df1["Expected_Result"][t])
+                self.expected_response1.append(self.alignment_df1["Expected_Result"][t])
 
         for i in range(len(self.exploded_prompt)):
-            if "{" not in self.exploded_prompt[i]:
-                if self.exploded_prompt[i] not in self.exploded_prompt1:
-                    self.exploded_prompt1.append(self.exploded_prompt[i])
-                    self.input_prompt1.append(self.input_prompt[i])
-                    self.augmentation_type1.append(self.augmentation_type[i])
-                    self.Expected_Response1.append(self.Expected_Response[i])
+            if "{" not in self.exploded_prompt[i] and self.exploded_prompt[i] not in self.exploded_prompt1:
+                self.exploded_prompt1.append(self.exploded_prompt[i])
+                self.input_prompt1.append(self.input_prompt[i])
+                self.augmentation_type1.append(self.augmentation_type_list1[i])
+                self.expected_response1.append(self.expected_response[i])
 
         zipped = list(
             zip(
                 self.input_prompt1,
                 self.exploded_prompt1,
-                self.Expected_Response1,
+                self.expected_response1,
                 self.augmentation_type1,
             )
         )
@@ -268,7 +266,6 @@ class Alignment:
         input_df,
         num_beams=4,
         num_beam_groups=4,
-        num_return_sequences=2,
         repetition_penalty=1.5,
         diversity_penalty=3.1,
         no_repeat_ngram_size=2,
@@ -384,29 +381,29 @@ class Alignment:
             samples = filter_df["paraphrased_prompt"]
 
             if subcapability == "uppercase":
-                perturbated_prompts = self.uppercaseTransform(samples)
+                perturbated_prompts = self.uppercase_transform(samples)
             elif subcapability == "lowercase":
-                perturbated_prompts = self.lowercaseTransform(samples)
+                perturbated_prompts = self.lowercase_transform(samples)
             elif subcapability == "titlecase":
-                perturbated_prompts = self.titlecaseTransform(samples)
+                perturbated_prompts = self.titlecase_transform(samples)
             elif subcapability == "add_punctuation":
-                perturbated_prompts = self.addPunctuation(samples)
+                perturbated_prompts = self.add_punctuation(samples)
             elif subcapability == "strip_punctuation":
-                perturbated_prompts = self.stripPunctuation(samples)
+                perturbated_prompts = self.strip_punctuation(samples)
             elif subcapability == "typo":
-                perturbated_prompts = self.addTypo(samples)
+                perturbated_prompts = self.add_typo(samples)
             elif subcapability == "context":
-                perturbated_prompts = self.addContext(
+                perturbated_prompts = self.add_context(
                     samples,
                     starting_context=starting_context,
                     ending_context=ending_context,
                 )
             elif subcapability == "contract":
-                perturbated_prompts = self.addContraction(samples)
+                perturbated_prompts = self.add_contraction(samples)
             elif subcapability == "ocr_typo":
-                perturbated_prompts = self.addOCRTypo(samples)
+                perturbated_prompts = self.add_ocr_typo(samples)
             elif subcapability == "abbreviate":
-                perturbated_prompts = self.addAbbreviation(samples)
+                perturbated_prompts = self.add_abbreviation(samples)
 
             if len(perturbated_prompts) > 0:
                 filter_df = filter_df.copy()
@@ -434,7 +431,7 @@ class Alignment:
         return self.result_pertubated_df
 
     @staticmethod
-    def uppercaseTransform(sample_list, prob=1.0):
+    def uppercase_transform(sample_list, prob=1.0):
         transformed_samples = []
 
         for sample in sample_list:
@@ -450,7 +447,7 @@ class Alignment:
         return transformed_samples
 
     @staticmethod
-    def lowercaseTransform(sample_list, prob=1.0):
+    def lowercase_transform(sample_list, prob=1.0):
         transformed_samples = []
 
         for sample in sample_list:
@@ -465,7 +462,7 @@ class Alignment:
         return transformed_samples
 
     @staticmethod
-    def addPunctuation(sample_list, prob=1.0, whitelist=None, count=1):
+    def add_punctuation(sample_list, prob=1.0, whitelist=None, count=1):
         if whitelist is None:
             whitelist = ["!", "?", ",", ".", "-", ":", ";"]
 
@@ -479,14 +476,14 @@ class Alignment:
 
         for s in sample_list:
             sample = deepcopy(s)
-            for i in range(count):
+            for _ in range(count):
                 if random.random() < prob:
                     perturbed_samples.append(check_whitelist(sample, whitelist))
 
         return perturbed_samples
 
     @staticmethod
-    def stripPunctuation(sample_list, prob=1.0, whitelist=None, count=1):
+    def strip_punctuation(sample_list, prob=1.0, whitelist=None, count=1):
         if whitelist is None:
             whitelist = ["!", "?", ",", ".", "-", ":", ";"]
 
@@ -505,7 +502,7 @@ class Alignment:
         return perturbed_samples
 
     @staticmethod
-    def addTypo(sample_list, error_rate=0.5):
+    def add_typo(sample_list, error_rate=0.5):
         perturbed_samples = []
         for sentence in sample_list:
             words = sentence.split()
@@ -530,7 +527,7 @@ class Alignment:
         return perturbed_samples
 
     @staticmethod
-    def addContext(
+    def add_context(
         sample_list,
         prob=1.0,
         starting_context=None,
@@ -545,36 +542,33 @@ class Alignment:
             elif strategy not in possible_methods:
                 print("strategy not in possible methods.")
 
-            transformations = []
+            if (strategy == "start" or strategy == "combined") and random.random() < prob:
+                add_tokens = random.choice(starting_context)
+                add_string = (
+                    " ".join(add_tokens)
+                    if isinstance(add_tokens, list)
+                    else add_tokens
+                )
+                if text != "-":
+                    text = add_string + " " + text
 
-            if strategy == "start" or strategy == "combined":
-                if random.random() < prob:
-                    add_tokens = random.choice(starting_context)
-                    add_string = (
-                        " ".join(add_tokens)
-                        if isinstance(add_tokens, list)
-                        else add_tokens
-                    )
-                    if text != "-":
-                        text = add_string + " " + text
+            if (strategy == "end" or strategy == "combined") and random.random() < prob:
+                add_tokens = random.choice(ending_context)
+                add_string = (
+                    " ".join(add_tokens)
+                    if isinstance(add_tokens, list)
+                    else add_tokens
+                )
+                if text != "-":
+                    text = text + " " + add_string
 
-            if strategy == "end" or strategy == "combined":
-                if random.random() < prob:
-                    add_tokens = random.choice(ending_context)
-                    add_string = (
-                        " ".join(add_tokens)
-                        if isinstance(add_tokens, list)
-                        else add_tokens
-                    )
-                    if text != "-":
-                        text = text + " " + add_string
 
             return text
 
         perturbed_samples = []
 
         for s in sample_list:
-            for i in range(count):
+            for _ in range(count):
                 sample = deepcopy(s)
                 sample = context(sample, strategy)
                 perturbed_samples.append(sample)
@@ -582,7 +576,7 @@ class Alignment:
         return perturbed_samples
 
     @staticmethod
-    def addContraction(sample_list, prob=1.0):
+    def add_contraction(sample_list, prob=1.0):
         def custom_replace(match):
             token = match.group(0)
             contracted_token = CONTRACTION_MAP.get(
@@ -614,7 +608,7 @@ class Alignment:
         return sample_list
 
     @staticmethod
-    def addOCRTypo(sample_list, prob=1.0, count: int = 1):
+    def add_ocr_typo(sample_list, prob=1.0, count: int = 1):
         def ocr_typo(regex, text):
             perturbed_text = text
             for word, typo_word in inverted_ocr_typo_dict.items():
@@ -636,14 +630,14 @@ class Alignment:
         perturbed_samples = []
 
         for s in sample_list:
-            for i in range(count):
+            for _ in range(count):
                 sample = deepcopy(s)
                 sample = ocr_typo(r"[^,\s.!?]+", sample)
                 perturbed_samples.append(sample)
         return perturbed_samples
 
     @staticmethod
-    def addAbbreviation(sample_list, prob=1.0):
+    def add_abbreviation(sample_list, prob=1.0):
         def insert_abbreviation(text):
             perturbed_text = text
 
@@ -673,7 +667,7 @@ class Alignment:
         return sample_list
 
     @staticmethod
-    def titlecaseTransform(sample_list, prob=1.0):
+    def titlecase_transform(sample_list, prob=1.0):
         perturbed_samples = []
 
         for idx, sample in enumerate(sample_list):

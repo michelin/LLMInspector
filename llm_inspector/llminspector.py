@@ -39,14 +39,14 @@ class llminspector:
         Export alignment data.
         """
         alignment_obj = Alignment(self.config)
-        final = alignment_obj.export_alignment_data()
+        alignment_obj.export_alignment_data()
 
     def adversarial(self):
         """
         Export adversarial data.
         """
         adversarial_obj = Adversarial(self.config)
-        result = adversarial_obj.export_adversarial_data()
+        adversarial_obj.export_adversarial_data()
 
     def evaluate(self, df):
         """
@@ -74,7 +74,3 @@ class llminspector:
         rag_eval = RagEval(self.config, self.env_path)
         rag_eval.rag_evaluation()
         rag_eval.export_eval()
-
-    # def converse(self):
-    #     conv = Converse(self.config_path)
-    #     conv.playwright_converse()
