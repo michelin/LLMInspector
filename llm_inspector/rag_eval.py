@@ -1,5 +1,6 @@
 from langchain_openai.chat_models import AzureChatOpenAI
 from langchain_openai.embeddings import AzureOpenAIEmbeddings
+from langchain import PromptTemplate
 
 from ragas.run_config import RunConfig
 from ragas.testset.generator import TestsetGenerator
@@ -30,6 +31,7 @@ from ragas import evaluate
 import pandas as pd
 import datetime
 import os
+from tqdm import tqdm
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -71,6 +73,7 @@ class RagEval:
         self.api_version = os.getenv("api_version")
         self.azure_endpoint = os.getenv("azure_endpoint")
         self.api_key = os.getenv("api_key")
+        self.thresholds = ast.literal_eval(self.rag_file["thresholds"])
         self.input_dir = self.rag_file["RAG_testset_input_directory"]
         self.testset_filename = self.rag_file["RAG_testset_input_filename"]
         self.file_dir = self.rag_file["RAG_testset_document_directory"]
@@ -121,6 +124,61 @@ class RagEval:
             filename_as_id=True,
         ).load_data()
 
+    def refine_answer(self, question, context, answer):
+        prompt: str = """
+            Context: {context}
+
+            Question: {question}
+
+            Refine the following answer to be brief, crisp, and well-organized based on the context and question. Ensure:
+
+            Conciseness: Answer in 100 words or less.
+            Clarity: Keep it organized with paragraphs and points, preferably in points.
+            Flow: Keep the answers concise and in one flow.
+            Language: Use the same terms and tone as the context.
+            Focus: Stick strictly to the given context
+            strictly do not include any implication 
+            Do not over explain anything. summarise only the points in the context.
+            Answer to the point as asked in the question, include extra information only if necessary and relevant.
+            Original Answer: {answer}
+            Refined Answer:
+            """
+        prompt = PromptTemplate.from_template(template=prompt)
+        prompt_formatted_str = prompt.format(question=question, context=context, answer=answer)
+        prediction = self.azure_model.predict(prompt_formatted_str)
+        return prediction
+
+    def enhance_ground_truth(self, test_df):
+        responses = []
+        for index, row in tqdm(test_df.iterrows(), desc="generating better GT:"):
+            question = row["question"]
+            answer = row["ground_truth"]
+            context = row["contexts"]
+            response = self.refine_answer(question, answer=answer, context=context)
+            responses.append(response)
+
+        test_df["responses"] = responses 
+        test_df.drop(columns=['ground_truth'], inplace=True)
+        test_df.rename(columns={'responses': 'ground_truth'}, inplace=True)
+        column_order = ['question', 'ground_truth', 'contexts', 'metadata', 'evolution_type', 'episode_done']
+        test_df = test_df[column_order]
+        return test_df
+    
+    def add_result_column(self, df):
+        def check_thresholds(row):
+            for metric, threshold in self.thresholds.items():
+                if metric in ['harmfulness', 'coherence', 'conciseness', 'maliciousness']:
+                    if row[metric] != threshold:
+                        return 'Fail'
+                else:
+                    if row[metric] < threshold:
+                        return 'Fail'
+            return 'Pass'
+        
+        df['result'] = df.apply(check_thresholds, axis=1)
+        
+        return df
+
     def generate_testset(self):
         """
         Generates the test set for RAG evaluation.
@@ -150,6 +208,7 @@ class RagEval:
         )
 
         self.test_df = self.testset.to_pandas()
+        self.test_df = self.enhance_ground_truth(self.test_df)
         return self.test_df
 
     def rag_evaluation(self):
@@ -161,7 +220,7 @@ class RagEval:
             return ast.literal_eval(s)
         
         self.initialize_models()
-        test_df = pd.read_excel(self.input_dir + self.testset_filename)
+        test_df = pd.read_excel(self.input_dir + self.testset_filename, index_col=None)
         test_df['contexts'] = test_df['contexts'].apply(string_to_list)
         test_df1 = test_df.drop_duplicates(subset="question", keep="first")
         test_df1 = test_df1.dropna(how="any")
@@ -189,8 +248,8 @@ class RagEval:
             embeddings=self.azure_embeddings,
         )
         self.result_df = self.result.to_pandas()
-        print("saving the evaluated dataframe.")
-        print(self.result_df.head())
+        self.result_df = self.add_result_column(self.result_df)
+        return self.result_df
 
     def export_testset(self):
         try:
@@ -215,6 +274,8 @@ class RagEval:
                 + f"{dt_time.month}{dt_time.day}_{dt_time.hour}{dt_time.minute}.xlsx"
             )
             file_path = self.output_dir + filename
+            if 'Unnamed: 0' in self.result_df.columns:
+                self.result_df = self.result_df.drop('Unnamed: 0', axis=1)
             self.result_df.to_excel(file_path, index=False)
             print("file saved in the path: ", file_path)
             return file_path
