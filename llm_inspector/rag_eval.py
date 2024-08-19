@@ -223,7 +223,12 @@ class RagEval:
         test_df = pd.read_excel(self.input_dir + self.testset_filename, index_col=None)
         test_df['contexts'] = test_df['contexts'].apply(string_to_list)
         test_df1 = test_df.drop_duplicates(subset="question", keep="first")
-        test_df1 = test_df1.dropna(how="any")
+        test_df1 = test_df1.dropna(subset=['question', 'ground_truth', 'answer', 'contexts']) # Updated to frop na based on selected list of columns
+
+        # Typecasting below list of columns to keep data types consistent
+        col_to_change = ['question', 'ground_truth', 'answer']
+        test_df1[col_to_change] = test_df1[col_to_change].astype(str)
+
         result_ds = Dataset.from_pandas(test_df1)
         print("Dataset created")
 
