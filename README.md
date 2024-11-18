@@ -18,7 +18,6 @@ When deploying Large Language Models (LLMs) in enterprise applications, it's cru
 The source code is currently hosted on GitHub at: [llminspector](https://github.com/michelin/LLMInspector)
 
 ```python
-pip install notebook==5.2.2
 pip install git+https://github.com/michelin/LLMInspector.git
 ```
 
