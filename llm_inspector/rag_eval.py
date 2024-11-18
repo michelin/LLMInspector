@@ -16,7 +16,6 @@ from ragas.metrics import (
     answer_relevancy,
     context_precision,
     context_recall,
-    context_relevancy,
     answer_similarity,
     answer_correctness,
 )
@@ -237,7 +236,6 @@ class RagEval:
             answer_relevancy,
             context_precision,
             context_recall,
-            context_relevancy,
             answer_similarity,
             answer_correctness,
             harmfulness,

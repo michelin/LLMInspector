@@ -2,7 +2,6 @@ import llm_inspector.alignment_replace_function as align_replace
 import pandas as pd
 import re
 import datetime
-from checklist.editor import Editor
 from collections import defaultdict
 import ast
 from copy import deepcopy
@@ -38,7 +37,8 @@ class Alignment:
     def __init__(
         self,
         config,
-        inputfile=None,
+        inputfile,
+        paraphrase_count=None,
         outfilepath=None,
         capability=None,
         subcapability=None,
@@ -46,6 +46,7 @@ class Alignment:
         self.tag_file_path = config["Alignment_File"]
         self.tag_augmentation = config["Tag_Augmentation_Key"]
         self.augmentation_type = config["Augmentation_Type"]
+        self.paraphrase_count = paraphrase_count
         dt_time = datetime.datetime.now()
         augmentations = ast.literal_eval(self.tag_file_path["augmentations"])
 
@@ -53,7 +54,7 @@ class Alignment:
             self.tag_file_path["Alignment_input_FilePath"]
             + self.tag_file_path["Alignment_GoldenDataset_FileName"]
         )
-        self.inputfile = inputfile if inputfile is not None else self.infile
+        self.inputfile = inputfile if inputfile is not None else print("Input File is required")
 
         alignment_df = pd.read_excel(self.inputfile)
         self.alignment_df1 = alignment_df
@@ -83,7 +84,7 @@ class Alignment:
         else:
             self.subcapability = []
 
-        self.editor = Editor()  # Initializing Checklist
+        #self.editor = Editor()  # Initializing Checklist
 
         self.augmentations = augmentations
         self.result_pertubated_df = pd.DataFrame()
@@ -111,39 +112,38 @@ class Alignment:
         self.alignment_df1["Tags"] = self.alignment_df1.UserInput.str.extract(
             r"{(.+?)}", expand=True
         )
-        self.editor = Editor()
+        #self.editor = Editor()
 
         input_tags = self.alignment_df1["Tags"].replace("", np.nan).dropna()
         input_tags = [item.lower() for item in input_tags]
 
         tag_list_infile = []
-        lexicon_key_infile = []
 
         tag_list = [item.strip("{}").lower() for item in tag_key_list]
-        lexicon_key_list = [
-            "country",
-            "city",
-            "nationality",
-            "female",
-            "religion",
-            "sexual_adj",
-        ]
+        # lexicon_key_list = [
+        #     "country",
+        #     "city",
+        #     "nationality",
+        #     "female",
+        #     "religion",
+        #     "sexual_adj",
+        # ]
 
         for tag in input_tags:
             if tag in tag_list:
                 tag_list_infile.append(tag)
 
-        for tag in input_tags:
-            if tag in lexicon_key_list:
-                lexicon_key_infile.append(tag)
+        # for tag in input_tags:
+        #     if tag in lexicon_key_list:
+        #         lexicon_key_infile.append(tag)
 
         tag_key_list = set(tag_list_infile)
         unique_tag_list_infile = list(tag_key_list)
         print("Tag key found in the file : ", unique_tag_list_infile)
 
-        lexicon_key_list = set(lexicon_key_infile)
-        unique_lexicon_key_inFile = list(lexicon_key_list)
-        print("Lexicon key found in the file : ", unique_lexicon_key_inFile)
+        #lexicon_key_list = set(lexicon_key_infile)
+        #unique_lexicon_key_inFile = list(lexicon_key_list)
+        #print("Lexicon key found in the file : ", unique_lexicon_key_inFile)
 
         # For Loop for Pertubating data with given Tags as part of Tag List
         for tag_key in unique_tag_list_infile:
@@ -191,37 +191,37 @@ class Alignment:
                     except KeywordNotFoundException as e:
                         print("Error:", e)
 
-        for lexicon_key in unique_lexicon_key_inFile:
-            key_value = "{" + lexicon_key + "}"
+        # for lexicon_key in unique_lexicon_key_inFile:
+        #     key_value = "{" + lexicon_key + "}"
 
-            input_prompt_list = []
-            selected_input_prompt = self.alignment_df1.loc[
-                self.alignment_df1["UserInput"].str.contains(key_value, case=False)
-            ]
-            selected_input_prompt_list = selected_input_prompt["UserInput"].to_list()
+        #     input_prompt_list = []
+        #     selected_input_prompt = self.alignment_df1.loc[
+        #         self.alignment_df1["UserInput"].str.contains(key_value, case=False)
+        #     ]
+        #     selected_input_prompt_list = selected_input_prompt["UserInput"].to_list()
 
-            for i in self.exploded_prompt:
-                if i not in selected_input_prompt_list and re.search(key_value, i, re.IGNORECASE):
-                    input_prompt_list.append(i)
+        #     for i in self.exploded_prompt:
+        #         if i not in selected_input_prompt_list and re.search(key_value, i, re.IGNORECASE):
+        #             input_prompt_list.append(i)
 
-            replaced_prompt_list = []
-            replaced_prompt_list = selected_input_prompt_list + input_prompt_list
+        #     replaced_prompt_list = []
+        #     replaced_prompt_list = selected_input_prompt_list + input_prompt_list
 
-            modified_input_prompt = []
+        #     modified_input_prompt = []
 
-            for j in range(len(replaced_prompt_list)):
-                ret = self.editor.template(replaced_prompt_list[j])
-                modified_input_prompt = ret.data[0:5]
-                for n in range(len(modified_input_prompt)):
-                    self.input_prompt.append(replaced_prompt_list[j])
-                    self.expected_response.extend(
-                        selected_input_prompt["Expected_Result"]
-                    )
-                    self.augmentation_type_list1.append(
-                        "Checklist Lexicon Keys_" + str(lexicon_key)
-                    )
-                    # self.self.augmentation_type.append(self.self.augmentation_type[y])
-                    self.exploded_prompt.append(modified_input_prompt[n])
+        #     for j in range(len(replaced_prompt_list)):
+        #         ret = self.editor.template(replaced_prompt_list[j])
+        #         modified_input_prompt = ret.data[0:5]
+        #         for n in range(len(modified_input_prompt)):
+        #             self.input_prompt.append(replaced_prompt_list[j])
+        #             self.expected_response.extend(
+        #                 selected_input_prompt["Expected_Result"]
+        #             )
+        #             self.augmentation_type_list1.append(
+        #                 "Checklist Lexicon Keys_" + str(lexicon_key)
+        #             )
+        #             # self.self.augmentation_type.append(self.self.augmentation_type[y])
+        #             self.exploded_prompt.append(modified_input_prompt[n])
 
     def alignment_data(self):
         self.checklist_tagaugmentation()
@@ -278,7 +278,7 @@ class Alignment:
         model = AutoModelForSeq2SeqLM.from_pretrained(
             "humarin/chatgpt_paraphraser_on_T5_base"
         )
-        num_return_sequences = int(self.tag_file_path["paraphrase_count"])
+        num_return_sequences = self.paraphrase_count if self.paraphrase_count is not None else int(self.tag_file_path["paraphrase_count"])
         paraphrased_prompt_list = []
         input_prompt_list = []
         exploded_prompt_list = []
@@ -693,3 +693,4 @@ class Alignment:
             raise ValueError(
                 "DataFrame is not initialized. Please provide the correct path."
             )
+        return self.align_output_path
