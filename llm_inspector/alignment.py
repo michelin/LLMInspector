@@ -37,7 +37,7 @@ class Alignment:
     def __init__(
         self,
         config,
-        inputfile,
+        inputfile=None,
         paraphrase_count=None,
         outfilepath=None,
         capability=None,
@@ -54,7 +54,7 @@ class Alignment:
             self.tag_file_path["Alignment_input_FilePath"]
             + self.tag_file_path["Alignment_GoldenDataset_FileName"]
         )
-        self.inputfile = inputfile if inputfile is not None else print("Input File is required")
+        self.inputfile = inputfile if inputfile is not None else self.infile
 
         alignment_df = pd.read_excel(self.inputfile)
         self.alignment_df1 = alignment_df
