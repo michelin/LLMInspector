@@ -3,6 +3,8 @@ from llm_inspector.alignment import Alignment
 from llm_inspector.eval_metrics import EvalMetrics
 from llm_inspector.rag_eval import RagEval
 from configparser import ConfigParser
+import os
+import subprocess
 
 
 class llminspector:
@@ -74,3 +76,21 @@ class llminspector:
         rag_eval = RagEval(self.config, self.env_path)
         rag_eval.rag_evaluation()
         rag_eval.export_eval()
+    
+    def run_streamlit_app(self):
+        """
+        Launch the Streamlit application for LLM Inspector.
+        """
+        import importlib.resources as pkg_resources
+        import llm_inspector
+        
+        # Get the package's installed location
+        try:
+            # For Python 3.9+
+            streamlit_file = pkg_resources.files(llm_inspector).joinpath("LLMInspector_main.py")
+            streamlit_path = str(streamlit_file)
+        except AttributeError:
+            # Fallback for older Python versions
+            streamlit_path = pkg_resources.resource_filename("llm_inspector", "LLMInspector_main.py")
+        
+        subprocess.run(["streamlit", "run", streamlit_path])

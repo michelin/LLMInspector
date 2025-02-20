@@ -1,0 +1,12 @@
+[client]
+showErrorDetails = false
+showSidebarNavigation = false
+
+[server]
+runOnSave = true
+
+[theme]
+backgroundColor="#d4e7fa"
+primaryColor="#27509b"
+secondaryBackgroundColor="#aec5e5"
+textColor="#0d0d0d"

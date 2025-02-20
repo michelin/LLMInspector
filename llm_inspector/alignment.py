@@ -118,6 +118,7 @@ class Alignment:
         input_tags = [item.lower() for item in input_tags]
 
         tag_list_infile = []
+        lexicon_key_infile = []
 
         tag_list = [item.strip("{}").lower() for item in tag_key_list]
         # lexicon_key_list = [

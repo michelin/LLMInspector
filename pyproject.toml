@@ -10,7 +10,7 @@ dependencies = [
     "matplotlib==3.9.2",
     "matplotlib-inline==0.1.7",
     "numpy==1.23.5",
-    "transformers==4.46.1",
+    "transformers==4.48.3",
     "llama-index==0.11.21",
     "llama-index-llms-azure-openai==0.2.2",
     "llama-index-embeddings-azure-openai==0.2.5",
@@ -20,22 +20,41 @@ dependencies = [
     "torch==2.5.1",
     "rouge==1.0.1",
     "evaluate==0.4.1",
-    "presidio-analyzer==2.2.355",
+    "presidio-analyzer==2.2.354",
     "deep-translator==1.11.4",
     "nltk==3.9.1",
     "textstat==0.7.4",
     "openpyxl==3.1.5",
     "docx2txt==0.8",
     "langdetect==1.0.9",
-    "bert-score==0.3.9",
-    "streamlit==1.40.0",
+    "bert-score==0.3.13",
+    "streamlit==1.39.0",
     "xlsxwriter==3.2.0",
-    "streamlit-aggrid==1.0.3"
+    "streamlit-aggrid==1.0.3",
+    "llm_guard==0.3.15",
+    "plotly==5.24.1",
+    "duckdb==1.1.3",
+    "python-docx==1.1.2",
+    "PyMuPDF==1.25.1",
+    "lingua-language-detector==2.0.2",
+
 ]
 classifiers = [
     "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
     "Private :: Do Not Upload",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["llm_inspector*"]
+
+[tool.setuptools.package-data]
+llm_inspector = [
+    "LLMInspector_main.py",
+    "pages/**/*",
+    "images/**/*",
+    ".streamlit/**/*"
 ]
 
 [build-system]
@@ -61,8 +80,6 @@ setup = [
     "urllib3",
     "wheel",
 ]
-
-[tool.setuptools.packages.find]
 
 ## DEV TOOLS
 ## pylint
@@ -96,7 +113,7 @@ skip_glob = ["venv", ".venv"]
 
 ## pytest
 [tool.pytest.ini_options]
-# addopts = "--cov-branch"
+addopts = "--cov-branch"
 
 ## coverage
 [tool.coverage.run]
