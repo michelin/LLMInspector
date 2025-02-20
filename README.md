@@ -6,7 +6,26 @@ So, we need to make sure LLM application is in alignment with functional and non
 
 LLMInspector is internally developed comprehensive Python package designed for the evaluation and testing of alignment as well as adversaries in Large Language Models (LLMs) based applications. The package is tailored to address the unique challenges associated with ensuring the ethical and effective deployment of powerful language models in enterprises. 
 
+
 LLMInspector helps to automatically generate the data and tests, run the tests suite and generate an insights report in which LLM capabilities and risks are quantified.
+
+## Key features:
+- Generation of prompts from Goldendataset by exploding the prompts with tag augmentation and paraphrasing.
+- Generation of prompts with various perturbations applied to test the robustness of the LLM application.
+- Generation of question and ground truth from documents, that can be used for testing of RAG based application.
+- Evaluation of RAG based LLM application using LLM based evaluation metrics.
+- Evaluation of the LLM application through various accuracy based metrics, sentiment analysis, emotion analysis, PII detection, Readability scores.
+- Adversarial red team testing using curated datasets to probe for risks and vulnerabilities in LLM applications
+
+## Installation:
+The source code is currently hosted on GitHub at: [llminspector](https://github.com/michelin/LLMInspector)
+
+```python
+pip install git+https://github.com/michelin/LLMInspector.git
+```
+
+The list of changes to LLMInspector between each release can be found [here](https://github.com/michelin/LLMInspector/releases). 
+
 
 This Python package features a Streamlit application that serves as a playground for users to discover its capabilities. The Streamlit application can be executed using the following command from the package location: streamlit run LLMInspector_main.py
 
@@ -35,3 +54,9 @@ The list of changes to LLMInspector between each release can be found [here](htt
 Detailed package and API Documentation is available [here](https://gitlab.michelin.com/DAI_QA/llminspector/-/wikis/home)
 
 
+
+- Sourabh Potnis
+- Ankit Zade
+- Kiran Prasath
+- Arpit Kumar
+- Shraddha Pawar

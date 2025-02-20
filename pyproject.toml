@@ -1,7 +1,7 @@
 [project]
 name = "llm_inspector"
 version = "0.1.0"
-description = "Python package for end to end LLM evaluation."
+description = "Python package for end-to-end LLM evaluation."
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -37,6 +37,7 @@ dependencies = [
     "python-docx==1.1.2",
     "PyMuPDF==1.25.1",
     "lingua-language-detector==2.0.2",
+
 ]
 classifiers = [
     "License :: Other/Proprietary License",
