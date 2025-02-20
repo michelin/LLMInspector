@@ -59,7 +59,7 @@ class RagEval:
         export_eval(): Exports the evaluation results.
     """
 
-    def __init__(self, config, env_path):
+    def __init__(self, config, env_path, inpDir=None, df=None, threshold=None, test_size=None, documentList=None):
         """
         Initializes the RagEval object.
 
@@ -72,10 +72,15 @@ class RagEval:
         self.api_version = os.getenv("api_version")
         self.azure_endpoint = os.getenv("azure_endpoint")
         self.api_key = os.getenv("api_key")
-        self.thresholds = ast.literal_eval(self.rag_file["thresholds"])
+        #self.thresholds = ast.literal_eval(self.rag_file["thresholds"])
+        self.thresholds = threshold if threshold is not None else ast.literal_eval(self.rag_file["thresholds"])
         self.input_dir = self.rag_file["RAG_testset_input_directory"]
         self.testset_filename = self.rag_file["RAG_testset_input_filename"]
-        self.file_dir = self.rag_file["RAG_testset_document_directory"]
+        #self.file_dir = self.rag_file["RAG_testset_document_directory"]
+
+        self.file_dir = inpDir if inpDir is not None else self.rag_file["RAG_testset_document_directory"]
+        self.testsize = test_size if test_size is not None else int(self.rag_file['testset_size'])
+
         self.output_dir = self.rag_file["RAG_output_directory"]
         self.azure_model = None
         self.azure_embeddings = None
@@ -85,6 +90,8 @@ class RagEval:
         self.generator = None
         self.testset = None
         self.test_df = None
+        self.df = df
+        self.documents = documentList if documentList is not None else None
 
     def initialize_models(self):
         """
@@ -124,24 +131,8 @@ class RagEval:
         ).load_data()
 
     def refine_answer(self, question, context, answer):
-        prompt: str = """
-            Context: {context}
-
-            Question: {question}
-
-            Refine the following answer to be brief, crisp, and well-organized based on the context and question. Ensure:
-
-            Conciseness: Answer in 100 words or less.
-            Clarity: Keep it organized with paragraphs and points, preferably in points.
-            Flow: Keep the answers concise and in one flow.
-            Language: Use the same terms and tone as the context.
-            Focus: Stick strictly to the given context
-            strictly do not include any implication 
-            Do not over explain anything. summarise only the points in the context.
-            Answer to the point as asked in the question, include extra information only if necessary and relevant.
-            Original Answer: {answer}
-            Refined Answer:
-            """
+        prompt: str = self.rag_file['prompt']
+        #prompt: str = 
         prompt = PromptTemplate.from_template(template=prompt)
         prompt_formatted_str = prompt.format(question=question, context=context, answer=answer)
         prediction = self.azure_model.predict(prompt_formatted_str)
@@ -185,14 +176,18 @@ class RagEval:
         Returns:
             DataFrame: Generated test set.
         """
-        test_size = int(self.rag_file["testset_size"])
+        #test_size = int(self.rag_file["testset_size"])
+        test_size = self.testsize
         print("initialising models")
         self.initialize_models()
         print("loading documents")
-        self.load_documents()
+        if self.documents is None:
+            self.load_documents()
+            print("________________________________________")
+            print(self.documents)
         self.run_config = RunConfig(timeout=180, max_retries=60, max_wait=180)
         self.generator = TestsetGenerator.from_langchain(
-            generator_llm=self.azure_model,
+            generator_llm=self.azure_model, 
             critic_llm=self.azure_model,
             embeddings=self.azure_embeddings,
             run_config=self.run_config,
@@ -219,7 +214,10 @@ class RagEval:
             return ast.literal_eval(s)
         
         self.initialize_models()
-        test_df = pd.read_excel(self.input_dir + self.testset_filename, index_col=None)
+        self.test_df_ragEval = self.df if self.df is not None else pd.read_excel(self.input_dir + self.testset_filename, index_col=None)
+        test_df = self.test_df_ragEval
+
+        
         test_df['contexts'] = test_df['contexts'].apply(string_to_list)
         test_df1 = test_df.drop_duplicates(subset="question", keep="first")
         test_df1 = test_df1.dropna(subset=['question', 'ground_truth', 'answer', 'contexts']) # Updated to frop na based on selected list of columns
@@ -229,7 +227,7 @@ class RagEval:
         test_df1[col_to_change] = test_df1[col_to_change].astype(str)
 
         result_ds = Dataset.from_pandas(test_df1)
-        print("Dataset created")
+        print("Dataset created3")
 
         metrics = [
             faithfulness,
@@ -243,7 +241,11 @@ class RagEval:
             conciseness,
             maliciousness,
         ]
+
+        #metrics = list(self.thresholds.keys())
+        #y = list(rag_thresholds.keys())
         print("evaluating the questions")
+        
         self.result = evaluate(
             result_ds,
             metrics=metrics,

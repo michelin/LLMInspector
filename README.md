@@ -1,60 +1,37 @@
-## LLMInspector: Comprehensive Evaluation and Testing for LLM Applications
+# LLMInspector
 
-When deploying Large Language Models (LLMs) in enterprise applications, it's crucial to understand, evaluate, and navigate their capabilities, limitations, and risks. Ensuring alignment with functional and non-functional requirements while maintaining robustness against adversarial queries is paramount.
 
-**LLMInspector** is a sophisticated Python package developed to address these challenges. It offers a comprehensive solution for evaluating and testing the alignment and security of LLM-based applications. Tailored for enterprise needs, LLMInspector ensures ethical and effective deployment of powerful language models.
+When we use LLMs/GenAI in enterprise applications, understanding, evaluating and navigating their capabilities, limitations as well as risks is very important.
+So, we need to make sure LLM application is in alignment with functional and non-functional requirements and is also safe & robust against adversarial queries.
 
-![flow chart](https://github.com/michelin/LLMInspector/blob/main/docs/assets/images/llminspector_flow_v1.0.png)
+LLMInspector is internally developed comprehensive Python package designed for the evaluation and testing of alignment as well as adversaries in Large Language Models (LLMs) based applications. The package is tailored to address the unique challenges associated with ensuring the ethical and effective deployment of powerful language models in enterprises. 
+
+LLMInspector helps to automatically generate the data and tests, run the tests suite and generate an insights report in which LLM capabilities and risks are quantified.
+
+This Python package features a Streamlit application that serves as a playground for users to discover its capabilities. The Streamlit application can be executed using the following command from the package location: streamlit run LLMInspector_main.py
+
+![alt text](https://gitlab.michelin.com/DAI_QA/llm_inspector/-/raw/main/images/llminspector_flow_v1.0.jpg)
+
 
 ## Key features:
-- Generation of prompts from Goldendataset by exploding the prompts with tag augmentation and paraphrasing.
-- Generation of prompts with various perturbations applied to test the robustness of the LLM application.
-- Generation of question and ground truth from documents, that can be used for testing of RAG based application.
-- Evaluation of RAG based LLM application using LLM based evaluation metrics.
-- Evaluation of the LLM application through various accuracy based metrics, sentiment analysis, emotion analysis, PII detection, Readability scores.
-- Adversarial red team testing using curated datasets to probe for risks and vulnerabilities in LLM applications
+- Contextualization of data and tests in accordance with enterprise application
+- LLM Alignment testing 
+- LLM Adversarial testing
+- Automated conversational framework
+- Comprehensive reporting
+- Streamlit application as playground
 
-## Installation:
-The source code is currently hosted on GitHub at: [llminspector](https://github.com/michelin/LLMInspector)
+## Where to get it:
+The source code is currently hosted on GitHub at: [llminspector](https://gitlab.michelin.com/DAI_QA/llminspector)
 
-```python
-pip install notebook==5.2.2
-pip install git+https://github.com/michelin/LLMInspector.git
+```
+pip install git+https://gitlab.michelin.com/DAI_QA/llm_inspector
 ```
 
-The list of changes to LLMInspector between each release can be found [here](https://github.com/michelin/LLMInspector/releases). 
 
+The list of changes to LLMInspector between each release can be found [here](https://gitlab.michelin.com/DAI_QA/llminspector/-/releases). 
 
 ## Documentation:
-Detailed package and API Documentation is available [here](https://github.com/michelin/LLMInspector/wiki)
+Detailed package and API Documentation is available [here](https://gitlab.michelin.com/DAI_QA/llminspector/-/wikis/home)
 
 
-## Getting Started
-
-Set up the config.ini and .env by referring [here](https://github.com/michelin/LLMInspector/wiki/Getting-Started)
-
-```python
-from llm_inspector.llminspector import llminspector
-import pandas as pd
-
-obj = llminspector(config_path=<path-to-cofig.ini>, env_path=<path-to-.env>)
-obj.alignment()
-obj.adversarial()
-obj.rag_evaluate()
-obj.converse()
-df = pd.read_excel(<path-to-input-csv>)
-obj.evaluate(df)
-```
-
-
-## Licence
-
-This project is licensed under the Apache License 2.0. See the [LICENSE](https://github.com/michelin/LLMInspector/blob/main/LICENSE) file for more details.
-
-
-## Authors
-
-- Sourabh Potnis
-- Ankit Zade
-- Kiran Prasath
-- Arpit Kumar 

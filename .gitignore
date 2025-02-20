@@ -6,17 +6,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+dev_config.ini
 .env
 rag_req.txt
 test.ipynb
-demo.py
-dev_config.ini
-/input
-/output
-/dataset
-.amlignore.amltmp
-.amlignore
-
 # Distribution / packaging
 .Python
 build/
@@ -36,8 +29,7 @@ wheelhouse/
 # virtualenv
 .venv/
 venv/
-env/
-llminspector_demo/
+
 demo.py
 
 # Installer logs
@@ -77,3 +69,8 @@ ipython_config.py
 
 # version created by 
 llm_inspector/version.py
+
+.amlignore
+.amlignore.amltmp
+
+*.amltmp
