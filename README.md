@@ -34,18 +34,20 @@ pip install -r req.txt
 ```
 LLMInspector/
 │
+├── agent_eval/                           # Database directory
+|  ├── data_claused.py               # Script for clause dataset generation
+|  ├── data_paraphrased.py           # Script for paraphrased dataset generation
+|  ├── evaluation.py                 # Evaluation script
+|  ├── guardrails.py                 # Guardrails implementation
+|  ├── trace_reader.py               # Trace reader implementation
+|
 ├── .gitignore                    # Git ignore file
 ├── config.py                     # Configuration parameters
-├── data_claused.py               # Script for clause dataset generation
-├── data_main.py                  # Main data processing script
-├── data_paraphrased.py           # Script for paraphrased dataset generation
-├── evaluation.py                 # Evaluation script
-├── guardrails.py                 # Guardrails implementation
 ├── README.md                     # Project documentation
 ├── req.txt                       # Requirements file
 ├── run_evaluation.py             # Script to run evaluation
 ├── run_traces.py                 # Script to run traces
-├── trace_reader.py               # Trace reader implementation
+├── run_dataset_generation.py     # Script to run testset generation
 │
 ├── db/                           # Database directory
 │   ├── Chinook.db                # SQLite database
