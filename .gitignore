@@ -1,0 +1,8 @@
+.env
+db
+input
+output
+agent.ipynb
+evaluation.ipynb
+read_traces.ipynb
+__pycache__
