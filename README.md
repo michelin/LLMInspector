@@ -12,10 +12,7 @@ A tool designed to aid in test set generation and evaluation of Agentic Workflow
 
 1. Clone the repository
 ```bash
-git clone https://github.com/michelin/LLMInspector.git
-git branch agent_eval
-git checkout agent_eval
-git pull origin agent_eval
+git clone -b agent_eval https://github.com/michelin/LLMInspector.git
 ```
 
 2. Create and activate conda environment
