@@ -1,42 +1,20 @@
 from langchain_openai.chat_models import AzureChatOpenAI
 from langchain_openai.embeddings import AzureOpenAIEmbeddings
-from langchain import PromptTemplate
-
+from langchain_core.prompts import PromptTemplate
 from ragas.run_config import RunConfig
-from ragas.testset.generator import TestsetGenerator
-
-from ragas.testset.evolutions import simple, reasoning, multi_context
-
-from llama_index.core import SimpleDirectoryReader
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.testset import TestsetGenerator
+from langchain_community.document_loaders import DirectoryLoader
 import ast
-from datasets import Dataset
-
-from ragas.metrics import (
-    faithfulness,
-    answer_relevancy,
-    context_precision,
-    context_recall,
-    answer_similarity,
-    answer_correctness,
-)
-from ragas.metrics.critique import (
-    harmfulness,
-    coherence,
-    conciseness,
-    maliciousness,
-)
-from ragas import evaluate
-
-import pandas as pd
+from tqdm import tqdm
 import datetime
 import os
-from tqdm import tqdm
-
 from pathlib import Path
 from dotenv import load_dotenv
-
+import logging
+logger = logging.getLogger(__name__)
 dt_time = datetime.datetime.now()
-
 
 class RagEval:
     """
@@ -59,7 +37,7 @@ class RagEval:
         export_eval(): Exports the evaluation results.
     """
 
-    def __init__(self, config, env_path, inpDir=None, df=None, threshold=None, test_size=None, documentList=None):
+    def __init__(self, config, env_path, inpDir=None, df=None, threshold=None, test_size=None, document_list=None, prompt_value=None):
         """
         Initializes the RagEval object.
 
@@ -72,12 +50,9 @@ class RagEval:
         self.api_version = os.getenv("api_version")
         self.azure_endpoint = os.getenv("azure_endpoint")
         self.api_key = os.getenv("api_key")
-        #self.thresholds = ast.literal_eval(self.rag_file["thresholds"])
         self.thresholds = threshold if threshold is not None else ast.literal_eval(self.rag_file["thresholds"])
         self.input_dir = self.rag_file["RAG_testset_input_directory"]
         self.testset_filename = self.rag_file["RAG_testset_input_filename"]
-        #self.file_dir = self.rag_file["RAG_testset_document_directory"]
-
         self.file_dir = inpDir if inpDir is not None else self.rag_file["RAG_testset_document_directory"]
         self.testsize = test_size if test_size is not None else int(self.rag_file['testset_size'])
 
@@ -91,51 +66,59 @@ class RagEval:
         self.testset = None
         self.test_df = None
         self.df = df
-        self.documents = documentList if documentList is not None else None
+        self.documents = document_list if document_list is not None else None
+        self.prompt_val: str = prompt_value if prompt_value is not None else self.rag_file['prompt']
 
     def initialize_models(self):
         """
         Initializes the required models.
         """
+        azure_openai_configs = {
+            "base_url": self.azure_endpoint,
+            "api_version": self.api_version,
+            "api_key": self.api_key,
+            "model_deployment": "gpt-4o-mini",
+            "model_name": "gpt-4o-mini",
+            "embedding_deployment": "text-embedding-ada-002",
+            "embedding_name": "text-embedding-ada-002",  
+        }
 
-        self.azure_model = AzureChatOpenAI(
-            openai_api_version=self.api_version,
-            azure_endpoint=self.azure_endpoint,
-            azure_deployment="gpt-35-turbo-16k",
-            model="gpt-35-turbo-16k",
-            api_key=self.api_key,
+        self.azure_llm = AzureChatOpenAI(
+            api_key=azure_openai_configs["api_key"],
+            openai_api_version=azure_openai_configs["api_version"],
+            azure_endpoint=azure_openai_configs["base_url"],
+            azure_deployment=azure_openai_configs["model_deployment"],
+            model=azure_openai_configs["model_name"],
             validate_base_url=False,
-            timeout=180,
-            temperature=1.0,
+            timeout=120
         )
 
-        self.azure_embeddings = AzureOpenAIEmbeddings(
-            openai_api_version=self.api_version,
-            azure_endpoint=self.azure_endpoint,
-            azure_deployment="text-embedding-ada-002",
-            model="text-embedding-ada-002",
-            api_key=self.api_key,
-            timeout=180,
+        # init the embeddings for answer_relevancy, answer_correctness and answer_similarity
+        azure_embeddings = AzureOpenAIEmbeddings(
+            api_key=azure_openai_configs["api_key"],
+            openai_api_version=azure_openai_configs["api_version"],
+            azure_endpoint=azure_openai_configs["base_url"],
+            azure_deployment=azure_openai_configs["embedding_deployment"],
+            model=azure_openai_configs["embedding_name"],
         )
+
+        self.evaluator_llm = LangchainLLMWrapper(self.azure_llm)
+        self.azure_embeddings = LangchainEmbeddingsWrapper(azure_embeddings)
+        self.my_run_config = RunConfig(max_workers=6, timeout=120)
 
     def load_documents(self):
         """
         Loads documents for evaluation.
         """
-        self.documents = SimpleDirectoryReader(
-            self.file_dir,
-            recursive=True,
-            num_files_limit=100,
-            required_exts=[".pdf", ".docx"],
-            filename_as_id=True,
-        ).load_data()
+        loader = DirectoryLoader(self.file_dir, glob=["**/*.pdf", "**/*.docx", "**/*.txt"], use_multithreading=True)
+        self.documents = loader.load()
 
     def refine_answer(self, question, context, answer):
-        prompt: str = self.rag_file['prompt']
-        #prompt: str = 
+        prompt: str = self.prompt_val
+        logger.info("Prompt for refining answer: " +str(prompt))
         prompt = PromptTemplate.from_template(template=prompt)
         prompt_formatted_str = prompt.format(question=question, context=context, answer=answer)
-        prediction = self.azure_model.predict(prompt_formatted_str)
+        prediction = self.azure_llm.invoke(prompt_formatted_str).content
         return prediction
 
     def enhance_ground_truth(self, test_df):
@@ -143,14 +126,14 @@ class RagEval:
         for index, row in tqdm(test_df.iterrows(), desc="generating better GT:"):
             question = row["question"]
             answer = row["ground_truth"]
-            context = row["contexts"]
+            context = row["reference_contexts"]
             response = self.refine_answer(question, answer=answer, context=context)
             responses.append(response)
 
         test_df["responses"] = responses 
         test_df.drop(columns=['ground_truth'], inplace=True)
         test_df.rename(columns={'responses': 'ground_truth'}, inplace=True)
-        column_order = ['question', 'ground_truth', 'contexts', 'metadata', 'evolution_type', 'episode_done']
+        column_order = ['question', 'ground_truth', 'reference_contexts', 'synthesizer_name']
         test_df = test_df[column_order]
         return test_df
     
@@ -177,84 +160,31 @@ class RagEval:
             DataFrame: Generated test set.
         """
         #test_size = int(self.rag_file["testset_size"])
-        test_size = self.testsize
-        print("initialising models")
+        logger.info("initialising models")
         self.initialize_models()
-        print("loading documents")
+
         if self.documents is None:
+            logger.info("loading documents")
             self.load_documents()
-            print("________________________________________")
-            print(self.documents)
-        self.run_config = RunConfig(timeout=180, max_retries=60, max_wait=180)
-        self.generator = TestsetGenerator.from_langchain(
-            generator_llm=self.azure_model, 
-            critic_llm=self.azure_model,
-            embeddings=self.azure_embeddings,
-            run_config=self.run_config,
-            chunk_size=256,
-        )
-        self.testset = self.generator.generate_with_llamaindex_docs(
-            self.documents,
-            test_size=test_size,  # langchain_docs
-            with_debugging_logs=False,
-            distributions={simple: 0.5, reasoning: 0.25, multi_context: 0.25},
-            run_config=self.run_config,
-        )
+            logger.info("List of documents uploaded for RAG Test data generation: " +str(self.documents))
 
-        self.test_df = self.testset.to_pandas()
-        self.test_df = self.enhance_ground_truth(self.test_df)
-        return self.test_df
-
-    def rag_evaluation(self):
-        """
-        Performs RAG evaluation and exports the evaluation results.
-        """
-        def string_to_list(s):
-            # Use ast.literal_eval to safely parse string to list
-            return ast.literal_eval(s)
+        generator = TestsetGenerator(llm=self.evaluator_llm, embedding_model=self.azure_embeddings)
+        dataset = generator.generate_with_langchain_docs(self.documents, 
+                                                         testset_size=self.testsize, 
+                                                         transforms_llm=self.evaluator_llm, 
+                                                         transforms_embedding_model=self.azure_embeddings,
+                                                         run_config=self.my_run_config)
         
-        self.initialize_models()
-        self.test_df_ragEval = self.df if self.df is not None else pd.read_excel(self.input_dir + self.testset_filename, index_col=None)
-        test_df = self.test_df_ragEval
 
-        
-        test_df['contexts'] = test_df['contexts'].apply(string_to_list)
-        test_df1 = test_df.drop_duplicates(subset="question", keep="first")
-        test_df1 = test_df1.dropna(subset=['question', 'ground_truth', 'answer', 'contexts']) # Updated to frop na based on selected list of columns
 
-        # Typecasting below list of columns to keep data types consistent
-        col_to_change = ['question', 'ground_truth', 'answer']
-        test_df1[col_to_change] = test_df1[col_to_change].astype(str)
-
-        result_ds = Dataset.from_pandas(test_df1)
-        print("Dataset created3")
-
-        metrics = [
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-            answer_similarity,
-            answer_correctness,
-            harmfulness,
-            coherence,
-            conciseness,
-            maliciousness,
-        ]
-
-        #metrics = list(self.thresholds.keys())
-        #y = list(rag_thresholds.keys())
-        print("evaluating the questions")
-        
-        self.result = evaluate(
-            result_ds,
-            metrics=metrics,
-            llm=self.azure_model,
-            embeddings=self.azure_embeddings,
-        )
-        self.result_df = self.result.to_pandas()
-        self.result_df = self.add_result_column(self.result_df)
-        return self.result_df
+        testset_df = dataset.to_pandas()
+        testset_df = testset_df.rename(columns={
+            'user_input': 'question',
+            'reference': 'ground_truth',
+        })
+        print(testset_df.columns)
+        testset_df = self.enhance_ground_truth(testset_df)
+        return testset_df
 
     def export_testset(self):
         try:
@@ -266,24 +196,9 @@ class RagEval:
             file_path = self.output_dir + filename
             self.test_df.to_excel(file_path, index=False)
             print("file saved in the path: ", file_path)
+            logger.info("file saved in the path: ", file_path)
             return file_path
         except Exception as e:
             print(f"Error occurred while saving the testset: {e}")
-            return None
-
-    def export_eval(self):
-        try:
-            dt_time = datetime.datetime.now()
-            filename = (
-                self.rag_file["RAG_eval_Output_fileName"]
-                + f"{dt_time.month}{dt_time.day}_{dt_time.hour}{dt_time.minute}.xlsx"
-            )
-            file_path = self.output_dir + filename
-            if 'Unnamed: 0' in self.result_df.columns:
-                self.result_df = self.result_df.drop('Unnamed: 0', axis=1)
-            self.result_df.to_excel(file_path, index=False)
-            print("file saved in the path: ", file_path)
-            return file_path
-        except Exception as e:
-            print(f"Error occurred while saving the testset: {e}")
+            logger.info(f"Error occurred while saving the testset: {e}")
             return None
