@@ -8,6 +8,7 @@ from copy import deepcopy
 import numpy as np
 import random
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import io
 
 from llm_inspector.constants import (
     TYPO_FREQUENCY,
@@ -684,6 +685,18 @@ class Alignment:
                 ]
                 perturbed_samples.append(" ".join(transformed_words))
         return perturbed_samples
+    
+    def to_excel(df):
+        output = io.BytesIO()
+        writer = pd.ExcelWriter(output, engine='xlsxwriter')
+        df.to_excel(writer, index=False, sheet_name='Sheet1')
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+        format1 = workbook.add_format({'num_format': '0.00'}) 
+        worksheet.set_column('A:A', None, format1)  
+        writer.close()
+        processed_data = output.getvalue()
+        return processed_data
 
     def export_alignment_data(self):
         self.transform_df()
