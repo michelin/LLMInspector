@@ -4,8 +4,8 @@ Public API (populated incrementally across the refactor phases):
     evaluate, LLMTestCase, EvaluationDataset, Golden,
     metric classes, synthesizers, Settings, __version__
 
-Phase 0 lays down the empty package tree; each subsequent phase ports the
-corresponding layer from the legacy ``llm_inspector`` package.
+The public surface below spans the schema, model, metrics, evaluate,
+synthesizer, and reporting layers.
 """
 
 try:
@@ -44,6 +44,7 @@ from .metrics import (
     SentimentMetric,
     TokenCountMetric,
 )
+from . import reporting
 from .models import (
     AzureOpenAIEmbedding,
     AzureOpenAIModel,
@@ -100,4 +101,5 @@ __all__ = [
     "AlignmentSynthesizer",
     "AdversarialSynthesizer",
     "RagSynthesizer",
+    "reporting",
 ]

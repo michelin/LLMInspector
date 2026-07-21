@@ -114,6 +114,6 @@ omit = [
     "venv",
     "docs/**",
     "public/**",
-    "llm_inspector/tests/**",
-    "llm_inspector/version.py",
+    "tests/**",
+    "llminspector/version.py",
 ]
