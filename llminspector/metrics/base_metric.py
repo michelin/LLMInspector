@@ -20,6 +20,7 @@ All heavy imports (langchain) are deferred to first use.
 from __future__ import annotations
 
 import asyncio
+import copy
 from abc import ABC, abstractmethod
 from numbers import Number
 from typing import Any, Optional, Set
@@ -43,6 +44,8 @@ class BaseMetric(ABC):
     metric_name: str = ""
     #: LLMTestCase attributes this metric needs (evaluate uses this to filter).
     required_inputs: Set[str] = set()
+    #: True for LLM-judge metrics that also expose a ``{name}_reasoning`` string.
+    produces_reasoning: bool = False
 
     def __init__(self, model: Any = None, threshold: Optional[float] = None) -> None:
         self.model = model
@@ -103,6 +106,18 @@ class BaseMetric(ABC):
     def measure(self, test_case: Any) -> Any:
         """Synchronous wrapper around :meth:`a_measure`."""
         return asyncio.run(self.a_measure(test_case))
+
+    def clone(self) -> "BaseMetric":
+        """Return a fresh copy with reset result state, sharing the model.
+
+        ``evaluate`` clones each metric per row so concurrently-processed rows
+        never race on the shared ``score`` / ``reason`` / ``success`` state.
+        """
+        new = copy.copy(self)
+        new.score = None
+        new.reason = None
+        new.success = None
+        return new
 
     def is_successful(self) -> Optional[bool]:
         """Pass/fail against ``threshold``.

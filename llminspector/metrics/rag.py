@@ -194,6 +194,7 @@ class _JsonJudgeMetric(BaseMetric):
     _prompt: str = ""
     _input_variables: list = []
     _error_label: str = "metric"
+    produces_reasoning = True
 
     def _values(self, test_case: Any) -> dict:  # pragma: no cover - overridden
         raise NotImplementedError
