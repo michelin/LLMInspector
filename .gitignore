@@ -30,6 +30,8 @@ wheelhouse/
 .venv/
 venv/
 
+notes/
+
 demo.py
 
 # Installer logs
