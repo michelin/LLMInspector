@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "ragas==0.1.21",
+    "pydantic>=2.0",
     "pandas==2.2.3",
     "matplotlib==3.9.2",
     "matplotlib-inline==0.1.7",
