@@ -50,6 +50,12 @@ from .models import (
     BaseEmbeddingModel,
     BaseLLM,
 )
+from .synthesizer import (
+    AdversarialSynthesizer,
+    AlignmentSynthesizer,
+    BaseSynthesizer,
+    RagSynthesizer,
+)
 from .test_case import LLMTestCase
 
 __all__ = [
@@ -90,4 +96,8 @@ __all__ = [
     "ReadabilityMetric",
     "TokenCountMetric",
     "PolicyComplianceMetric",
+    "BaseSynthesizer",
+    "AlignmentSynthesizer",
+    "AdversarialSynthesizer",
+    "RagSynthesizer",
 ]
