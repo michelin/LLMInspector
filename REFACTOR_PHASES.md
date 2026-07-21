@@ -118,3 +118,13 @@ references the old package or streamlit.
 - Regression anchor: keep a golden run of the legacy `evaluate` output columns to diff
   against the new `evaluate()` (Phase 4).
 - Final: `pip install` the built wheel into a clean venv and run the `examples/` end-to-end script.
+
+---
+
+## Future work (post-Phase 7)
+- **Fold `overall_accuracy` into the answer-correctness judge.** Phase 3 keeps
+  `metrics/aggregate.py::calculate_overall_accuracy` as a stopgap that blends
+  `answer_correctness` / `faithfulness` / `answer_relevancy` (0.5/0.3/0.2). The intended
+  end-state is to compute this quality signal *directly inside the answer-correctness
+  prompt* and retire the separate aggregate function. Preserve the current behavior/numbers
+  until this lands.
