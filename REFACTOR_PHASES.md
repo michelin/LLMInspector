@@ -77,18 +77,28 @@ as the legacy `reorder_results` contract.
 
 ## Phase 5 — Synthesizer
 🔨
-- `AlignmentSynthesizer` (3-stage: tag-augment → HF-T5 paraphrase → perturb; perturbations in `perturbations.py`).
-- `AdversarialSynthesizer` (curated-bank sample/filter, unchanged algorithm).
-- `RagSynthesizer` (ragas `TestsetGenerator` + per-row GT refinement); **fix** the
-  `self.test_df` never-set gap; RAG *scoring* now goes through `evaluate()` (Phase 4), so the
-  missing `rag_evaluation()` / `export_eval()` are rebuilt as thin wrappers over `evaluate()`.
-- Split the 6 used tables out of `constants.py` into `llminspector/data/`; drop the rest.
+**Design (decided during the phase): two layers — a stable shell + a swappable engine**, so the
+planned engine replacements (custom testset generation, dropping ragas, red-teaming instead of
+static filtering) are drop-in and don't force a second refactor of this component.
+- Stable outer contract: `BaseSynthesizer(ABC).generate() -> EvaluationDataset` (of `Golden`s).
+  `Golden` gained an optional `metadata` dict so every engine emits a uniform shape.
+- Swappable inner engines behind ABCs in `synthesizer/engines/` (each isolates its heavy dep):
+  - `AlignmentEngine` → `LegacyTagT5Engine` (tag-augment → HF-T5 paraphrase → perturb).
+  - `TestsetBackend` → `RagasTestsetBackend` (ragas `TestsetGenerator` + per-row GT refine;
+    **all ragas imports confined here**).
+  - `AttackSource` → `CuratedBankSource` (curated-bank sample/filter, unchanged algorithm).
+- `perturbations.py` + `data/` (the 6 tables split from the 148k-line `constants.py`) are
+  engine-agnostic primitives kept outside the swappable engines.
+- **Fixes applied** (behavior otherwise preserved): the `RagSynthesizer.generate` `self.test_df`
+  never-set gap; RAG *scoring* goes through `evaluate()` (Phase 4) via `rag_evaluation()` /
+  `export_eval()` thin wrappers.
 
-⚠️ Confirm during this phase:
-- The two silent perturbation bugs (`add_contraction` / `add_abbreviation` return the
-  unmodified input) — **recommend fix + note** rather than preserve.
+⚠️ Confirmed during this phase:
+- The two silent perturbation bugs (`add_contraction` / `add_abbreviation` returned the
+  unmodified input) — **fixed** (now return the perturbed output), noted inline.
 
-✅ Each synthesizer produces a testset from the sample inputs with the documented output columns.
+✅ Each synthesizer produces a testset from the sample inputs with the documented output columns
+(preserved via `Golden.metadata`); engine internals stay swappable behind the ABCs.
 
 ---
 

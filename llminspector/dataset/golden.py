@@ -5,15 +5,19 @@ A golden carries the human-authored ``input`` (and optionally an
 synthesis produce derived test cases.
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Golden(BaseModel):
     """Seed row for synthesis: an input plus optional reference answer and
     context. Unlike :class:`~llminspector.test_case.LLMTestCase` it has no
     ``actual_output`` — the answer is what synthesis/evaluation produces.
+
+    ``metadata`` carries synthesizer-specific columns (e.g. ``augmentation_type``,
+    ``Capability``, ``synthesizer_name``) so every synthesizer — legacy or a
+    future custom engine — emits the same uniform :class:`Golden` shape.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -21,6 +25,7 @@ class Golden(BaseModel):
     input: str
     expected_output: Optional[str] = None
     context: Optional[List[str]] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("input")
     @classmethod

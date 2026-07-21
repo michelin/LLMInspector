@@ -85,12 +85,21 @@ LLMInspector/
 │   │                             #   async engine ported from helper.py (per-row asyncio.gather,
 │   │                             #   batch as_completed, availability filter, dependency auto-add)
 │   │
-│   ├── synthesizer/
+│   ├── synthesizer/              # two layers: a stable shell + a swappable engine
 │   │   ├── __init__.py
-│   │   ├── alignment.py          # AlignmentSynthesizer: tag-augment → paraphrase (HF T5) → perturb
-│   │   ├── adversarial.py        # AdversarialSynthesizer: curated-bank sample/filter
-│   │   ├── rag.py                # RagSynthesizer: ragas TestsetGenerator + GT refinement
-│   │   └── perturbations.py      # perturbation transforms extracted from alignment.py
+│   │   ├── base.py               # BaseSynthesizer(ABC): generate()->EvaluationDataset (stable contract)
+│   │   ├── alignment.py          # AlignmentSynthesizer: delegates to an AlignmentEngine
+│   │   ├── adversarial.py        # AdversarialSynthesizer: delegates to an AttackSource
+│   │   ├── rag.py                # RagSynthesizer: delegates to a TestsetBackend; rag_evaluation()
+│   │   │                         #   / export_eval() are thin wrappers over evaluate() (Phase 4)
+│   │   ├── alignment_tag.py      # tag_replace helper (from alignment_replace_function.py)
+│   │   ├── perturbations.py      # engine-agnostic perturbation transforms (2 legacy no-op bugs fixed)
+│   │   └── engines/              # THE SWAPPABLE SEAMS (future: custom / ragas-free / red-team)
+│   │       ├── base.py           #   AlignmentEngine / TestsetBackend / AttackSource ABCs
+│   │       ├── legacy_alignment.py  # LegacyTagT5Engine: tag-augment → HF-T5 paraphrase → perturb
+│   │       ├── ragas_testset.py     # RagasTestsetBackend: ragas TestsetGenerator + GT refine (ragas confined here)
+│   │       └── curated_bank.py      # CuratedBankSource: static curated-bank sample/filter
+│   │   # Golden gained an optional `metadata` dict so every engine emits a uniform Golden shape.
 │   │
 │   ├── data/                     # the ~6 lookup tables actually used, split out of the
 │   │                             #   148k-line constants.py (contractions, ocr_typo,
