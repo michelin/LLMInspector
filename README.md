@@ -25,10 +25,48 @@ against a broad metric suite, and **reporting** the results.
   engine so custom generators drop in without a refactor.
 - **Reporting** — export results to DataFrame / Excel / numeric summary.
 
-## Installation
+## Getting started
+
+### 1. Create a virtual environment
+
+Python 3.9+ is required (developed and tested on 3.12).
+
+Using [uv](https://github.com/astral-sh/uv) (recommended):
+
+```bash
+uv venv --python 3.12 .venv
+source .venv/bin/activate
+```
+
+Or the standard library:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2. Install the package
 
 ```bash
 pip install -e .
+```
+
+> **Note — build backend.** LLMInspector builds with the Michelin-internal
+> `pydnx_packaging` backend, which is not on public PyPI. On a machine **with**
+> Artifactory access the command above works as-is. **Without** it, disable build
+> isolation after preinstalling the build tools:
+>
+> ```bash
+> uv pip install --python .venv/bin/python setuptools wheel
+> uv pip install --python .venv/bin/python -e . --no-build-isolation
+> ```
+
+### 3. Verify
+
+```bash
+python -c "import llminspector; print(llminspector.__version__)"
+python examples/01_dataset_roundtrip.py     # runs fully offline
+pytest -q
 ```
 
 ## Quickstart

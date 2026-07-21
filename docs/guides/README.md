@@ -15,7 +15,11 @@ in [`REFACTOR_TARGET.md`](../../REFACTOR_TARGET.md) and [`REFACTOR_PHASES.md`](.
 
 ## Install
 
+See [Getting started](../../README.md#getting-started) for venv setup and the
+`pydnx` build-backend note. In short:
+
 ```bash
+uv venv --python 3.12 .venv && source .venv/bin/activate
 pip install -e .
 ```
 
