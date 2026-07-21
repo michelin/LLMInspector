@@ -1,4 +1,4 @@
-"""Setup script for llm_inspector."""
+"""Setup script for llminspector."""
 
 from os.path import dirname
 from os.path import join as pjoin
