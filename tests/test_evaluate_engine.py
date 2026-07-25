@@ -1,25 +1,40 @@
 """Phase 4 — the evaluate engine.
 
-Driven with lightweight fake metrics (no langchain/ragas) plus, for the
-dependency path, the real FaithfulnessMetric which fails gracefully to ``None``
-when given no model. Covers availability filtering, input-order preservation,
-the answer_correctness/overall_accuracy overwrite + dependency auto-add/null,
-column expansion, and DataFrame export.
+Driven with lightweight fake metrics (no langchain/ragas). Covers availability
+filtering, input-order preservation, column expansion via ``BaseMetric.expand``,
+and DataFrame export.
+
+Phase 8.1 removed the ``overall_accuracy`` blend and the dependency auto-add, so
+the engine now runs exactly the metrics it is handed — the tests below pin that.
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
-from llminspector import EvaluationDataset, LLMTestCase, evaluate
+from llminspector import evaluate
+from llminspector.dataset import EvaluationDataset
 from llminspector.evaluate import EvaluationResult
+from llminspector.metrics import (
+    AnswerCorrectnessMetric,
+    CodeDetectMetric,
+    ContentModerationMetric,
+    PolicyComplianceMetric,
+)
 from llminspector.metrics.base_metric import BaseMetric
+from llminspector.test_case import LLMTestCase
 
 
 class FakeMetric(BaseMetric):
     def __init__(
-        self, name, required_inputs, value,
-        produces_reasoning=False, reason=None, delay=0.0,
+        self,
+        name,
+        required_inputs,
+        value,
+        produces_reasoning=False,
+        reason=None,
+        delay=0.0,
     ):
         super().__init__(model=None)
         self.metric_name = name
@@ -43,6 +58,7 @@ def _dataset(*test_cases):
 
 
 # --------------------------------------------------------------------------- #
+
 
 def test_requires_metrics():
     with pytest.raises(ValueError):
@@ -79,10 +95,12 @@ def test_input_order_preserved_despite_completion_order():
     tcs = [LLMTestCase(input=f"q{i}", actual_output=f"a{i}") for i in range(3)]
     ds = _dataset(*tcs)
     m = FakeMetric(
-        "answer_sentiment", {"actual_output"},
+        "answer_sentiment",
+        {"actual_output"},
         value=lambda tc: tc.input,
         delay=None,
     )
+
     # per-row delay: q0 -> 0.03, q1 -> 0.02, q2 -> 0.01
     class _Ordered(FakeMetric):
         async def a_measure(self, test_case):
@@ -100,46 +118,108 @@ def test_input_order_preserved_despite_completion_order():
 def test_reasoning_column_added():
     ds = _dataset(LLMTestCase(input="q", actual_output="a"))
     m = FakeMetric(
-        "conciseness", {"input", "actual_output"}, 0.8,
-        produces_reasoning=True, reason="tight",
+        "conciseness",
+        {"input", "actual_output"},
+        0.8,
+        produces_reasoning=True,
+        reason="tight",
     )
     result = evaluate(ds, metrics=[m], show_progress=False)
     assert result.rows[0]["conciseness"] == 0.8
     assert result.rows[0]["conciseness_reasoning"] == "tight"
 
 
-def test_overall_accuracy_overwrites_answer_correctness():
+def _answer_correctness(response: str) -> AnswerCorrectnessMetric:
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(return_value=response)
+    return m
+
+
+def test_answer_correctness_column_equals_the_metrics_own_score():
+    """The exported column is the judge's score — nothing overwrites it.
+
+    Under the retired blend this row reported 0.75 (0.5*1.0 + 0.3*0.5 +
+    0.2*0.5) while the metric object held 1.0.
+    """
     ds = _dataset(
-        LLMTestCase(input="q", actual_output="a", expected_output="gt",
-                    retrieval_context=["c"])
+        LLMTestCase(
+            input="q", actual_output="a", expected_output="gt", retrieval_context=["c"]
+        )
     )
-    ac = FakeMetric("answer_correctness", {"input", "actual_output", "expected_output"}, 1.0)
-    fa = FakeMetric("faithfulness", {"input", "actual_output", "retrieval_context"}, 0.5)
+    ac = _answer_correctness(
+        '{"answer_correctness": 1.0, "gt_agreement": 0.8, "faithfulness": 1.0, '
+        '"relevancy": 1.0, "answer_correctness_reasoning": "supported extra"}'
+    )
+    fa = FakeMetric(
+        "faithfulness", {"input", "actual_output", "retrieval_context"}, 0.5
+    )
     ar = FakeMetric("answer_relevancy", {"input", "actual_output"}, 0.5)
-    result = evaluate(ds, metrics=[ac, fa, ar], show_progress=False)
-    # 0.5*1.0 + 0.3*0.5 + 0.2*0.5 = 0.75
-    assert result.rows[0]["answer_correctness"] == 0.75
-    assert result.rows[0]["faithfulness"] == 0.5  # requested -> kept
+    row = evaluate(ds, metrics=[ac, fa, ar], show_progress=False).rows[0]
+
+    assert row["answer_correctness"] == 1.0
+    # standalone faithfulness / relevancy are reported as measured, untouched
+    assert row["faithfulness"] == 0.5
+    assert row["answer_relevancy"] == 0.5
 
 
-def test_dependency_auto_add_and_null():
+def test_answer_correctness_sub_judgements_become_columns():
     ds = _dataset(
-        LLMTestCase(input="q", actual_output="a", expected_output="gt")
+        LLMTestCase(
+            input="q", actual_output="a", expected_output="gt", retrieval_context=["c"]
+        )
     )
-    ac = FakeMetric("answer_correctness", {"input", "actual_output", "expected_output"}, 1.0)
-    ar = FakeMetric("answer_relevancy", {"input", "actual_output"}, 0.0)
-    # faithfulness auto-added (real metric, no model -> fails to None), then nulled.
-    result = evaluate(ds, metrics=[ac, ar], show_progress=False)
-    # 2-metric blend: 0.75*1.0 + 0.25*0.0 = 0.75
-    assert result.rows[0]["answer_correctness"] == 0.75
-    assert result.rows[0]["faithfulness"] is None  # dependency-only -> nulled
+    ac = _answer_correctness(
+        '{"answer_correctness": 0.6, "gt_agreement": 0.4, "faithfulness": 0.9, '
+        '"relevancy": 1.0}'
+    )
+    row = evaluate(ds, metrics=[ac], show_progress=False).rows[0]
+    assert row["answer_correctness_gt_agreement"] == 0.4
+    assert row["answer_correctness_faithfulness"] == 0.9
+    assert row["answer_correctness_relevancy"] == 1.0
+
+
+def test_answer_correctness_runs_without_context_and_drops_faithfulness():
+    ds = _dataset(LLMTestCase(input="q", actual_output="a", expected_output="gt"))
+    ac = _answer_correctness(
+        '{"answer_correctness": 0.4, "gt_agreement": 0.4, "relevancy": 0.9}'
+    )
+    row = evaluate(ds, metrics=[ac], show_progress=False).rows[0]
+    # the row is judged, not skipped...
+    assert row["answer_correctness"] == 0.4
+    assert row["answer_correctness_gt_agreement"] == 0.4
+    # ...with the faithfulness sub-score absent by definition
+    assert row["answer_correctness_faithfulness"] is None
+
+
+def test_no_dependency_auto_add():
+    """Requesting answer_correctness alone must not pull in other metrics."""
+    ds = _dataset(LLMTestCase(input="q", actual_output="a", expected_output="gt"))
+    ac = _answer_correctness('{"answer_correctness": 1.0}')
+    row = evaluate(ds, metrics=[ac], show_progress=False).rows[0]
+    assert "faithfulness" not in row
+    assert "answer_relevancy" not in row
+
+
+def test_expand_emits_columns_even_when_metric_is_skipped():
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))  # no ground truth
+    ac = _answer_correctness('{"answer_correctness": 1.0}')
+    row = evaluate(ds, metrics=[ac], show_progress=False).rows[0]
+    assert row["answer_correctness"] is None
+    assert row["answer_correctness_gt_agreement"] is None
+    assert row["answer_correctness_faithfulness"] is None
+    assert row["answer_correctness_relevancy"] is None
+
+
+# Structured-score metrics fan their score out into several columns. Since 8.2
+# that mapping belongs to the metric class, so these drive the real classes with
+# the LLM call mocked rather than a fake standing in for the name.
 
 
 def test_code_detect_expansion():
     ds = _dataset(LLMTestCase(input="q", actual_output="print(1)"))
-    m = FakeMetric(
-        "answer_code_detected", {"actual_output"},
-        {"code_detected": True, "code_language": "python"},
+    m = CodeDetectMetric(target="actual_output")
+    m._arun_prompt = AsyncMock(
+        return_value='{"code_detected": true, "code_language": "python"}'
     )
     row = evaluate(ds, metrics=[m], show_progress=False).rows[0]
     assert row["answer_code_detected"] is True
@@ -148,22 +228,25 @@ def test_code_detect_expansion():
 
 def test_content_moderation_expansion():
     ds = _dataset(LLMTestCase(input="q", actual_output="a"))
-    flags = {
-        "hate_speech": 0, "fairness": 1, "sexually_explicit_information": 0,
-        "violence": 0, "self_harm": 0, "dangerous_content": 0,
-        "harassment": 0, "profanity": 1, "toxicity_risk": 0,
-    }
-    m = FakeMetric("answer_content_moderation", {"actual_output"}, flags)
+    m = ContentModerationMetric(target="actual_output")
+    m._arun_prompt = AsyncMock(
+        return_value=(
+            '{"hate_speech": 0, "fairness": 1, "sexually_explicit_information": 0, '
+            '"violence": 0, "self_harm": 0, "dangerous_content": 0, '
+            '"harassment": 0, "profanity": 1, "toxicity_risk": 0}'
+        )
+    )
     row = evaluate(ds, metrics=[m], show_progress=False).rows[0]
     assert row["answer_fairness"] == 1 and row["answer_profanity"] == 1
-    assert "answer_content_moderation" not in row  # original key removed
+    assert row["answer_toxicity_risk"] == 0
+    assert "answer_content_moderation" not in row  # the metric owns no such column
 
 
 def test_policy_expansion():
     ds = _dataset(LLMTestCase(input="q", actual_output="a", policy="no pii"))
-    m = FakeMetric(
-        "policy_check", {"input", "actual_output", "policy"},
-        {"is_policy_violated": True, "policy_violation_reason": "leak"},
+    m = PolicyComplianceMetric()
+    m._arun_prompt = AsyncMock(
+        return_value='{"is_policy_violated": true, "policy_violation_reason": "leak"}'
     )
     row = evaluate(ds, metrics=[m], show_progress=False).rows[0]
     assert row["is_policy_violated"] is True
@@ -186,7 +269,13 @@ def test_to_pandas_has_source_and_metric_columns():
     )
     m = FakeMetric("answer_sentiment", {"actual_output"}, "Positive")
     df = evaluate(ds, metrics=[m], show_progress=False).to_pandas()
-    assert list(df.columns)[:5] == ["question", "answer", "ground_truth", "contexts", "policy"]
+    assert list(df.columns)[:5] == [
+        "question",
+        "answer",
+        "ground_truth",
+        "contexts",
+        "policy",
+    ]
     assert "answer_sentiment" in df.columns
     assert df["question"].tolist() == ["q1", "q2"]
     assert df["answer_sentiment"].tolist() == ["Positive", "Positive"]

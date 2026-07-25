@@ -33,6 +33,9 @@ class CuratedBankSource(AttackSource):
         Rows to sample when no capability/sub-capability filter is applied.
     """
 
+    #: declared so to_pandas()'s column set is knowable without running it
+    metadata_keys = ("Capability", "Sub Capability", "Char Len")
+
     def __init__(
         self,
         bank_df: pd.DataFrame,
@@ -43,13 +46,17 @@ class CuratedBankSource(AttackSource):
         self.bank_df = bank_df
         self.sample_size = sample_size
 
+        # "all" means "no filter", same as omitting it. The legacy code then
+        # converted None to [] and used `!= []` as the unset sentinel, which
+        # made the attribute's type str-or-list for no benefit; None is the
+        # sentinel throughout now.
         if capability is not None and capability.lower() == "all":
             capability = None
         if subcapability is not None and subcapability.lower() == "all":
             subcapability = None
 
-        self.capability = capability if capability is not None else []
-        self.subcapability = subcapability if subcapability is not None else []
+        self.capability: Optional[str] = capability
+        self.subcapability: Optional[str] = subcapability
 
     def _random_selection(self) -> pd.DataFrame:
         sample_record_df = self.bank_df.sample(n=self.sample_size)
@@ -57,13 +64,13 @@ class CuratedBankSource(AttackSource):
 
     def _filtered(self) -> pd.DataFrame:
         cap, subcap = self.capability, self.subcapability
-        if cap != [] and subcap == []:
+        if cap is not None and subcap is None:
             return self.bank_df[self.bank_df["Capability"].str.lower() == cap.lower()]
-        if cap == [] and subcap != []:
+        if cap is None and subcap is not None:
             return self.bank_df[
                 self.bank_df["Sub Capability"].str.lower() == subcap.lower()
             ]
-        if cap != [] and subcap != []:
+        if cap is not None and subcap is not None:
             return self.bank_df[
                 (self.bank_df["Capability"].str.lower() == cap.lower())
                 & (self.bank_df["Sub Capability"].str.lower() == subcap.lower())

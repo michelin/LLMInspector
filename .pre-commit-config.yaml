@@ -12,3 +12,28 @@ repos:
     language: system
     entry: isort --check-only
     types: [python]
+
+  # pyproject.toml carries a full pylint config that nothing was running.
+  - id: pylint
+    name: pylint
+    language: system
+    entry: pylint
+    types: [python]
+    require_serial: true
+    args: [--rcfile=pyproject.toml]
+
+  # Lenient to start: the package ships py.typed, so its annotations are
+  # load-bearing for downstream users and want *some* checking. Tighten by
+  # removing the ignore flags below as the codebase catches up.
+  - id: mypy
+    name: mypy
+    language: system
+    entry: mypy
+    types: [python]
+    require_serial: true
+    exclude: ^(tests|docs|examples)/
+    args:
+    - --ignore-missing-imports
+    - --no-strict-optional
+    - --allow-untyped-defs
+    - --allow-untyped-calls

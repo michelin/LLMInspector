@@ -1,4 +1,4 @@
-"""Configuration file for llm_inspector's documentations."""
+"""Configuration file for llminspector's documentations."""
 
 # pylint: disable=invalid-name, redefined-builtin, wrong-import-position
 #
@@ -18,28 +18,30 @@
 import datetime
 import os
 import sys
-
-from pydnx.packaging import git
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as installed_version
 
 current_directory = os.path.abspath(".")
 project_directory = os.path.abspath("..")
 sys.path.insert(0, current_directory)
+# autodoc imports the package, so the repo root has to be importable even when
+# llminspector is not pip-installed into the docs build environment.
+sys.path.insert(0, project_directory)
 
 # -- Project information -----------------------------------------------------
 
-project = "llm_inspector"
+project = "llminspector"
 copyright = "%s, PM/SIM" % datetime.date.today().year
 author = "PM/SIM"
 
-version_infos = git.fetch_version(project_directory)
-if version_infos and "long" in version_infos:
-    # The full version, including alpha/beta/rc tags
-    release = version_infos["long"]
-    # The short X.Y version
-    version = ".".join(release.split(".")[:2])
-else:
+try:
+    # The full version, including alpha/beta/rc tags.
+    release = installed_version(project)
+except PackageNotFoundError:
+    # Building from a checkout that was never installed.
     release = "dev"
-    version = release
+# The short X.Y version.
+version = ".".join(release.split(".")[:2])
 
 
 # -- General configuration ---------------------------------------------------
@@ -71,7 +73,7 @@ master_doc = "index"
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.

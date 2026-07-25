@@ -4,7 +4,8 @@ Metrics are **class-based**. Construct one with the model it needs, then either 
 or hand it to [`evaluate()`](04_evaluate.md).
 
 ```python
-from llminspector import FaithfulnessMetric, LLMTestCase
+from llminspector.metrics import FaithfulnessMetric
+from llminspector.test_case import LLMTestCase
 
 metric = FaithfulnessMetric(model, threshold=0.7)
 score = metric.measure(LLMTestCase(input="...", actual_output="...", retrieval_context=["..."]))
@@ -23,7 +24,7 @@ that lack them.
 |--------|-------|--------|
 | `BertScoreMetric` | actual_output, expected_output | float (local BERTScore) |
 | `FaithfulnessMetric` | input, actual_output, retrieval_context | float + reason |
-| `AnswerCorrectnessMetric` | input, actual_output, expected_output | float + reason |
+| `AnswerCorrectnessMetric` | input, actual_output, expected_output (context optional) | float + reason + 3 sub-scores |
 | `AnswerRelevancyMetric` | input, actual_output | float + reason |
 | `ConcisenessMetric` | input, actual_output | float + reason |
 | `ContextPrecisionMetric` | input, expected_output, retrieval_context | float (ragas) |
@@ -59,8 +60,32 @@ SentimentMetric(model, target="actual_output")    # -> name "answer_sentiment"
 Local-only metrics (`BertScore`, `PIIDetection`, `Readability`, `TokenCount`,
 `LanguageDetection`) don't need a model — construct them with no arguments.
 
+## A metric owns its output columns
+
+`evaluate()` contains no metric names. Each metric declares what it contributes to the exported
+table:
+
+| attribute | meaning | default |
+|---|---|---|
+| `expand(score)` | score → `{column: value}` | `{name: score}` |
+| `output_columns` | every column it owns, in order | derived from `expand`, with `{name}_reasoning` behind the headline |
+| `sort_key` | where its block sits in the table (lower first) | `1000` |
+| `sort_key_by_target` | per-target override for dual metrics | `{}` |
+
+Metrics whose score is structured override `expand`: `ContentModerationMetric` returns its nine
+category columns, `CodeDetectMetric` two, `PolicyComplianceMetric` two, `AnswerCorrectnessMetric`
+its headline score plus three sub-judgements. `expand` must return the **same key set for every
+score including `None`** — the engine calls `expand(None)` to reserve columns on rows where the
+metric is skipped, which is what keeps the header stable across rows.
+
+To add a metric, subclass `BaseMetric`, set `metric_name` / `required_inputs` / `sort_key`, and
+implement `a_measure`. No other file needs to change.
+
 ## Aggregates
 
-`calculate_overall_accuracy(results_dict)` and `calculate_total_tokens(results_dict)` operate on a
-per-row results dict (not a single test case). `evaluate()` applies them for you; see
-[Evaluate](04_evaluate.md).
+`calculate_total_tokens(results_dict)` operates on a per-row results dict (not a single test case).
+`evaluate()` applies it for you; see [Evaluate](04_evaluate.md).
+
+`calculate_overall_accuracy` has been removed. Its 0.5/0.3/0.2 blend now lives inside
+`AnswerCorrectnessMetric`'s prompt as a single holistic judgement — see
+[Evaluate](04_evaluate.md#answer_correctness-is-a-single-unified-judge).

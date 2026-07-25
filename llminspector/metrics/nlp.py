@@ -8,10 +8,13 @@ textstat, TokenCount uses tiktoken — each lazily imported / cached.
 from __future__ import annotations
 
 import gc
+import logging
 from functools import lru_cache
 from typing import Any
 
 from .base_metric import DualTargetMetric
+
+logger = logging.getLogger(__name__)
 
 SENTIMENT_PROMPT = """
         You are an expert sentiment analysis AI. Your task is to analyze the sentiment of the provided text and classify it into one of the following categories: Positive, Negative, or Neutral.
@@ -30,7 +33,7 @@ EMOTION_PROMPT = """
 def _get_lang_detector():
     from lingua import Language, LanguageDetectorBuilder
 
-    print("Loading language detector...")
+    logger.info("Loading language detector...")
     return LanguageDetectorBuilder.from_languages(
         Language.ARABIC,
         Language.CHINESE,
@@ -52,6 +55,7 @@ def _get_lang_detector():
 
 class SentimentMetric(DualTargetMetric):
     name_suffix = "sentiment"
+    sort_key_by_target = {"input": 102, "actual_output": 202}
 
     async def a_measure(self, test_case: Any) -> Any:
         try:
@@ -60,7 +64,7 @@ class SentimentMetric(DualTargetMetric):
             )
             self.score = result
         except Exception as e:  # noqa: BLE001 - mirror legacy behavior
-            print("Sentiment error occurred:", str(e))
+            self.record_failure(e)
             self.score = ""
         self.is_successful()
         return self.score
@@ -68,6 +72,7 @@ class SentimentMetric(DualTargetMetric):
 
 class EmotionMetric(DualTargetMetric):
     name_suffix = "emotion"
+    sort_key_by_target = {"input": 101, "actual_output": 201}
 
     async def a_measure(self, test_case: Any) -> Any:
         try:
@@ -76,7 +81,7 @@ class EmotionMetric(DualTargetMetric):
             )
             self.score = result
         except Exception as e:  # noqa: BLE001 - mirror legacy behavior
-            print("Emotion error occurred:", str(e))
+            self.record_failure(e)
             self.score = ""
         self.is_successful()
         return self.score
@@ -84,6 +89,7 @@ class EmotionMetric(DualTargetMetric):
 
 class LanguageDetectionMetric(DualTargetMetric):
     name_suffix = "language"
+    sort_key_by_target = {"input": 103, "actual_output": 203}
 
     async def a_measure(self, test_case: Any) -> Any:
         try:
@@ -100,7 +106,7 @@ class LanguageDetectionMetric(DualTargetMetric):
             else:
                 self.score = None
         except Exception as e:  # noqa: BLE001 - mirror legacy behavior
-            print(f"Error detecting language: {str(e)}")
+            self.record_failure(e)
             self.score = None
         self.is_successful()
         return self.score
@@ -110,6 +116,7 @@ class ReadabilityMetric(DualTargetMetric):
     """Flesch-Kincaid grade level (legacy ``text_quality``)."""
 
     name_suffix = "flesch_kincaid_grade"
+    sort_key_by_target = {"input": 105, "actual_output": 205}
 
     async def a_measure(self, test_case: Any) -> Any:
         import asyncio
@@ -129,9 +136,15 @@ class TokenCountMetric(DualTargetMetric):
     """Token count via tiktoken (legacy ``num_tokens_from_string``)."""
 
     name_suffix = "tokens"
+    sort_key_by_target = {"input": 106, "actual_output": 206}
 
-    def __init__(self, model=None, threshold=None, target="actual_output",
-                 encoding_name: str = "o200k_base") -> None:
+    def __init__(
+        self,
+        model=None,
+        threshold=None,
+        target="actual_output",
+        encoding_name: str = "o200k_base",
+    ) -> None:
         super().__init__(model=model, threshold=threshold, target=target)
         self.encoding_name = encoding_name
 

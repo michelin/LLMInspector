@@ -9,7 +9,7 @@ variables:
   GIT_STRATEGY: clone
   SONAR_SCANNER_OPTIONS: "-Dsonar.python.coverage.reportPaths=public/coverage.xml
     -Dsonar.coverage.exclusions=public/**,docs/**,**/tests/**,setup.py -Dsonar.exclusions=public/**,docs/**"
-  PYTHON_MAIN_REPOSITORY_NAME: llm_inspector
+  PYTHON_MAIN_REPOSITORY_NAME: llminspector
 include:
 - project: dord/infra/central-ci-cd/ci-cd
   file:
@@ -25,20 +25,19 @@ pythoncheck:
   needs: []
 wheel:
   needs: []
+# Single 3.12 leg: requires-python is >=3.12, so there is no second version to
+# test and nothing left to allow-fail. The old matrix ran 3.9 as the required
+# leg and 3.12 with allow_failure:true, because numpy==1.23.5 could not build on
+# 3.12 — that pin is gone.
 pytest:
   needs: []
   parallel:
     matrix:
-    - PYTHON_VERSION: '3.9'
+    - PYTHON_VERSION: '3.12'
       MAIN_VERSION: 'true'
-    - PYTHON_VERSION:
-      - '3.12'
-      MAIN_VERSION: 'false'
   rules:
   - if: $MAIN_VERSION == "true"
     allow_failure: false
-  - if: $MAIN_VERSION == "false"
-    allow_failure: true
 pages:
   needs:
   - pythoncheck

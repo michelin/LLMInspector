@@ -13,16 +13,20 @@ ragas ``LangchainLLMWrapper`` / ``LangchainEmbeddingsWrapper`` with
 ``RunConfig(max_workers=6, timeout=120)``. This module collapses the two into
 one class each, selecting auth by which credential is supplied (exactly one of
 ``api_key`` / ``azure_ad_token_provider``), and promoting the hard-coded model /
-deployment names to constructor args (defaulted from :class:`Settings`).
+deployment names to constructor args (defaulted from :class:`AzureSettings`).
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional
 
-from ..config.settings import Settings
+from ..config.settings import AzureSettings
 from .base_model import BaseEmbeddingModel, BaseLLM
+from .retry import (
+    DEFAULT_MAX_RETRIES,
+    a_with_rate_limit_retry,
+    with_rate_limit_retry,
+)
 
 # ragas RunConfig values were identical in both legacy setups.
 _DEFAULT_MAX_WORKERS = 6
@@ -41,23 +45,25 @@ def _resolve_auth(
         )
 
 
-def _run_config():
+def _run_config(
+    max_workers: int = _DEFAULT_MAX_WORKERS, timeout: int = _DEFAULT_TIMEOUT
+):
     from ragas.run_config import RunConfig
 
-    return RunConfig(max_workers=_DEFAULT_MAX_WORKERS, timeout=_DEFAULT_TIMEOUT)
+    return RunConfig(max_workers=max_workers, timeout=timeout)
 
 
 class AzureOpenAIModel(BaseLLM):
     """Azure OpenAI chat model.
 
-    Supply connection details via a :class:`Settings` instance (or explicit
+    Supply connection details via an :class:`AzureSettings` instance (or explicit
     kwargs, which override the settings) plus exactly one credential:
     ``api_key`` **or** ``azure_ad_token_provider``.
     """
 
     def __init__(
         self,
-        settings: Optional[Settings] = None,
+        settings: Optional[AzureSettings] = None,
         *,
         api_key: Optional[str] = None,
         azure_ad_token_provider: Optional[Callable[[], str]] = None,
@@ -67,8 +73,10 @@ class AzureOpenAIModel(BaseLLM):
         model_name: Optional[str] = None,
         bypass_temperature: bool = True,
         timeout: int = _DEFAULT_TIMEOUT,
+        max_workers: int = _DEFAULT_MAX_WORKERS,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
-        settings = settings or Settings()
+        settings = settings or AzureSettings()
         api_key = api_key if api_key is not None else settings.api_key
         _resolve_auth(api_key, azure_ad_token_provider)
 
@@ -76,6 +84,12 @@ class AzureOpenAIModel(BaseLLM):
         self.api_version = api_version or settings.api_version
         self.azure_deployment = azure_deployment or settings.azure_deployment
         self.model_name = model_name or settings.model_name
+        #: Concurrency ceiling for this endpoint. Feeds the ragas ``RunConfig``
+        #: *and* ``evaluate()``'s default batch size, so the two knobs that used
+        #: to drift apart now come from one number.
+        self.max_workers = max_workers
+        #: Rate-limit retries per call; 0 disables backoff.
+        self.max_retries = max_retries
         self._api_key = api_key
         self._azure_ad_token_provider = azure_ad_token_provider
         self._bypass_temperature = bypass_temperature
@@ -87,14 +101,14 @@ class AzureOpenAIModel(BaseLLM):
     def _build_client(self):
         from langchain_openai import AzureChatOpenAI
 
-        kwargs: dict = dict(
-            openai_api_version=self.api_version,
-            azure_endpoint=self.azure_endpoint,
-            azure_deployment=self.azure_deployment,
-            model=self.model_name,
-            validate_base_url=False,
-            timeout=self._timeout,
-        )
+        kwargs: dict = {
+            "openai_api_version": self.api_version,
+            "azure_endpoint": self.azure_endpoint,
+            "azure_deployment": self.azure_deployment,
+            "model": self.model_name,
+            "validate_base_url": False,
+            "timeout": self._timeout,
+        }
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key
         else:
@@ -114,11 +128,15 @@ class AzureOpenAIModel(BaseLLM):
         return self.model_name
 
     def generate(self, prompt: str, **kwargs: Any) -> str:
-        response = self._client.invoke(prompt, **kwargs)
+        response = with_rate_limit_retry(
+            self._client.invoke, prompt, max_retries=self.max_retries, **kwargs
+        )
         return getattr(response, "content", response)
 
     async def a_generate(self, prompt: str, **kwargs: Any) -> str:
-        response = await self._client.ainvoke(prompt, **kwargs)
+        response = await a_with_rate_limit_retry(
+            self._client.ainvoke, prompt, max_retries=self.max_retries, **kwargs
+        )
         return getattr(response, "content", response)
 
     def ragas_llm(self) -> Any:
@@ -126,13 +144,16 @@ class AzureOpenAIModel(BaseLLM):
 
     @property
     def client(self):
-        """The underlying ``AzureChatOpenAI`` langchain client."""
+        """The underlying ``AzureChatOpenAI`` langchain client.
+
+        Azure-specific escape hatch — **not** part of the ``BaseLLM`` contract.
+        """
         return self._client
 
     @property
     def run_config(self):
-        """A fresh ragas ``RunConfig`` matching the legacy settings."""
-        return _run_config()
+        """A fresh ragas ``RunConfig`` built from this model's limits."""
+        return _run_config(max_workers=self.max_workers, timeout=self._timeout)
 
 
 class AzureOpenAIEmbedding(BaseEmbeddingModel):
@@ -144,7 +165,7 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
 
     def __init__(
         self,
-        settings: Optional[Settings] = None,
+        settings: Optional[AzureSettings] = None,
         *,
         api_key: Optional[str] = None,
         azure_ad_token_provider: Optional[Callable[[], str]] = None,
@@ -153,7 +174,7 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
         embedding_deployment: Optional[str] = None,
         embedding_name: Optional[str] = None,
     ) -> None:
-        settings = settings or Settings()
+        settings = settings or AzureSettings()
         api_key = api_key if api_key is not None else settings.api_key
         _resolve_auth(api_key, azure_ad_token_provider)
 
@@ -172,12 +193,12 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
     def _build_client(self):
         from langchain_openai import AzureOpenAIEmbeddings
 
-        kwargs: dict = dict(
-            openai_api_version=self.api_version,
-            azure_endpoint=self.azure_endpoint,
-            azure_deployment=self.embedding_deployment,
-            model=self.embedding_name,
-        )
+        kwargs: dict = {
+            "openai_api_version": self.api_version,
+            "azure_endpoint": self.azure_endpoint,
+            "azure_deployment": self.embedding_deployment,
+            "model": self.embedding_name,
+        }
         if self._api_key is not None:
             kwargs["api_key"] = self._api_key
         else:

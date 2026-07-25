@@ -9,7 +9,13 @@ synthesizer.to_excel("out.xlsx")
 ```
 
 Synthesizer-specific columns live in `Golden.metadata`, so the output shape is uniform regardless
-of which synthesizer (or engine) produced it.
+of which synthesizer (or engine) produced it. Each engine **declares** the metadata keys it
+emits, so the column set is knowable without running it:
+
+```python
+synth.metadata_keys   # ('Capability', 'Sub Capability', 'Char Len')
+# -> to_pandas() columns are ['input', 'expected_output', 'context', *metadata_keys]
+```
 
 ## Two layers: shell + engine
 
@@ -23,12 +29,23 @@ future implementations replace — **without changing your calling code**.
 | `RagSynthesizer` | `TestsetBackend` | `RagasTestsetBackend` | ragas-free custom |
 | `AdversarialSynthesizer` | `AttackSource` | `CuratedBankSource` | red-teaming generator |
 
-To swap: implement the ABC and inject it (`engine=` / `backend=` / `source=`). Nothing else changes.
+**Construction is split in two.** The constructor takes the engine and nothing else; the
+`from_*` classmethods build the default engine from raw data:
+
+```python
+AlignmentSynthesizer(engine)                    # bring your own engine
+AlignmentSynthesizer.from_dataframe(df, ...)    # build the default one
+AlignmentSynthesizer.from_excel(path, ...)      # ...from a spreadsheet
+```
+
+One signature used to accept *either* a DataFrame plus engine-config kwargs *or* a pre-built
+engine, raising `ValueError` when given neither — a call the type signature said was valid but
+never was. Each path now has an honest signature.
 
 ## Adversarial (offline)
 
 ```python
-from llminspector import AdversarialSynthesizer
+from llminspector.synthesizer import AdversarialSynthesizer
 
 synth = AdversarialSynthesizer.from_excel(
     "adversarial_bank.xlsx", capability="all", sample_size=100,
@@ -41,7 +58,7 @@ Samples / filters a curated bank by capability / sub-capability. Pure pandas —
 ## Alignment
 
 ```python
-from llminspector import AlignmentSynthesizer
+from llminspector.synthesizer import AlignmentSynthesizer
 
 synth = AlignmentSynthesizer.from_excel(
     "alignment_seeds.xlsx",
@@ -58,10 +75,12 @@ tables in `llminspector.data`.
 ## RAG
 
 ```python
-from llminspector import AzureOpenAIModel, AzureOpenAIEmbedding, RagSynthesizer, Settings
+from llminspector.config import AzureSettings
+from llminspector.models import AzureOpenAIModel, AzureOpenAIEmbedding
+from llminspector.synthesizer import RagSynthesizer
 
-settings = Settings.from_env()
-synth = RagSynthesizer(
+settings = AzureSettings.from_env()
+synth = RagSynthesizer.from_documents(
     model=AzureOpenAIModel(settings),
     embedding=AzureOpenAIEmbedding(settings),
     document_dir="path/to/docs",
@@ -70,10 +89,16 @@ synth = RagSynthesizer(
 seeds = synth.generate()     # ragas TestsetGenerator + per-row ground-truth refinement
 ```
 
-RAG **scoring** goes through the [`evaluate()`](04_evaluate.md) engine:
+RAG **scoring** goes through the [`evaluate()`](04_evaluate.md) engine directly:
 
 ```python
+from llminspector import a_evaluate
+
 # after your RAG app answers the seed questions into `answered` (an EvaluationDataset):
-result = synth.rag_evaluation(answered, metrics=[FaithfulnessMetric(model)])
-synth.export_eval(result, "rag_eval.xlsx")
+result = await a_evaluate(answered, [FaithfulnessMetric(model)])
+result.to_excel("rag_eval.xlsx")
 ```
+
+> `RagSynthesizer.rag_evaluation()` / `export_eval()` were removed in Phase 8.6. They forwarded
+> to exactly the two calls above and added nothing; a second door into `evaluate()` is worse
+> than no door.

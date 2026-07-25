@@ -1,11 +1,14 @@
 """Phase 1 exit-criteria tests for ``EvaluationDataset``.
 
-Covers the required round-trip of a sample ``.xlsx`` from ``example/Data/``
-into an ``EvaluationDataset`` and back, plus pandas round-tripping of full
-test cases (including list-valued ``retrieval_context``) and column mapping.
-"""
+Covers the required round-trip of a seed ``.xlsx`` into an
+``EvaluationDataset`` and back, plus pandas round-tripping of full test cases
+(including list-valued ``retrieval_context``) and column mapping.
 
-from pathlib import Path
+The seed workbook is built in-test rather than committed as a binary: it
+reproduces the shape of the golden sample that used to live under
+``example/Data/`` (a ``UserInput`` / ``Expected_Result`` pair, tag
+placeholders intact, no context column).
+"""
 
 import pandas as pd
 import pytest
@@ -13,22 +16,80 @@ import pytest
 from llminspector.dataset import EvaluationDataset, Golden
 from llminspector.test_case import LLMTestCase
 
-SAMPLE_XLSX = (
-    Path(__file__).resolve().parents[1]
-    / "example"
-    / "Data"
-    / "Golden_data_sample.xlsx"
-)
+# 20 rows, mirroring the retired example/Data/Golden_data_sample.xlsx.
+_GOLDEN_SEED_ROWS = [
+    ("{greeting}, how are you?", "Hey, welcome! How can I help you today?"),
+    ("What are your opening hours?", "We are open Monday to Friday, 9am to 6pm."),
+    (
+        "How do I reset my password?",
+        "Use the 'Forgot password' link on the sign-in page.",
+    ),
+    (
+        "Where can I find my invoice?",
+        "Invoices are under Account > Billing > Invoices.",
+    ),
+    ("Can I change my delivery address?", "Yes, until the order has been dispatched."),
+    (
+        "{greeting}, I need help with an order.",
+        "Of course — could you share the order number?",
+    ),
+    ("Do you ship internationally?", "We ship to most countries in the EU and the UK."),
+    ("What is your return policy?", "Returns are accepted within 30 days of delivery."),
+    (
+        "How long does delivery take?",
+        "Standard delivery arrives in 3 to 5 working days.",
+    ),
+    (
+        "Is there a warranty on tyres?",
+        "All tyres carry a two-year manufacturer warranty.",
+    ),
+    (
+        "How do I cancel my subscription?",
+        "Go to Account > Subscription and select Cancel.",
+    ),
+    ("Can I speak to a human agent?", "Sure — I can transfer you to an agent now."),
+    (
+        "What payment methods do you accept?",
+        "We accept major cards, PayPal, and bank transfer.",
+    ),
+    (
+        "My package has not arrived.",
+        "I'm sorry — let's track it with your order number.",
+    ),
+    ("Do you offer a student discount?", "Yes, 10% off with a valid student ID."),
+    (
+        "How do I update my email address?",
+        "Change it under Account > Profile > Contact details.",
+    ),
+    ("{greeting}, thanks for your help!", "Happy to help — have a great day!"),
+    (
+        "Are your tyres suitable for winter?",
+        "Our winter range is certified for cold conditions.",
+    ),
+    ("Can I get a VAT receipt?", "Yes, VAT receipts are downloadable from Billing."),
+    (
+        "How do I contact support by phone?",
+        "Call 0800 123 456, Monday to Friday, 9am to 6pm.",
+    ),
+]
+
+
+@pytest.fixture
+def sample_xlsx(tmp_path):
+    """Write the seed golden workbook and return its path."""
+    path = tmp_path / "Golden_data_sample.xlsx"
+    pd.DataFrame(_GOLDEN_SEED_ROWS, columns=["UserInput", "Expected_Result"]).to_excel(
+        path, index=False
+    )
+    return path
 
 
 # -- exit criterion: sample .xlsx -> dataset -> back ------------------------
 
 
-def test_golden_sample_xlsx_roundtrip(tmp_path):
-    assert SAMPLE_XLSX.exists(), f"missing sample data: {SAMPLE_XLSX}"
-
+def test_golden_sample_xlsx_roundtrip(sample_xlsx, tmp_path):
     ds = EvaluationDataset.goldens_from_excel(
-        str(SAMPLE_XLSX),
+        str(sample_xlsx),
         input_col="UserInput",
         expected_output_col="Expected_Result",
         context_col="__none__",  # column absent -> context stays None

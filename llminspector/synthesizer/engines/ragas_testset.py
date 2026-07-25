@@ -29,8 +29,8 @@ class RagasTestsetBackend(TestsetBackend):
     Parameters
     ----------
     model:
-        An :class:`~llminspector.models.azure_openai.AzureOpenAIModel` (its
-        ``.client`` refines answers; its ``.ragas_llm()`` drives generation).
+        A :class:`~llminspector.models.base_model.BaseLLM` — ``generate``
+        refines answers, and ``ragas_llm()`` drives testset generation.
     embedding:
         An :class:`~llminspector.models.azure_openai.AzureOpenAIEmbedding`
         (its ``.ragas_embeddings()`` drives generation).
@@ -43,6 +43,9 @@ class RagasTestsetBackend(TestsetBackend):
     refine_prompt:
         Template with ``{question}`` / ``{context}`` / ``{answer}`` placeholders.
     """
+
+    #: declared so to_pandas()'s column set is knowable without running it
+    metadata_keys = ("synthesizer_name",)
 
     def __init__(
         self,
@@ -71,13 +74,12 @@ class RagasTestsetBackend(TestsetBackend):
         return loader.load()
 
     def refine_answer(self, question, context, answer) -> str:
-        from langchain_core.prompts import PromptTemplate
-
-        prompt = PromptTemplate.from_template(template=self.refine_prompt)
-        prompt_formatted_str = prompt.format(
-            question=question, context=context, answer=answer
+        # Goes through BaseLLM.generate rather than reaching into a langchain
+        # client, so the refinement step works with any provider (only testset
+        # *generation* below actually needs ragas).
+        return self.model.generate(
+            self.refine_prompt.format(question=question, context=context, answer=answer)
         )
-        return self.model.client.invoke(prompt_formatted_str).content
 
     def enhance_ground_truth(self, test_df: pd.DataFrame) -> pd.DataFrame:
         responses = []
@@ -85,18 +87,27 @@ class RagasTestsetBackend(TestsetBackend):
             question = row["question"]
             answer = row["ground_truth"]
             context = row["reference_contexts"]
-            responses.append(self.refine_answer(question, answer=answer, context=context))
+            responses.append(
+                self.refine_answer(question, answer=answer, context=context)
+            )
 
         test_df["responses"] = responses
         test_df.drop(columns=["ground_truth"], inplace=True)
         test_df.rename(columns={"responses": "ground_truth"}, inplace=True)
-        column_order = ["question", "ground_truth", "reference_contexts", "synthesizer_name"]
+        column_order = [
+            "question",
+            "ground_truth",
+            "reference_contexts",
+            "synthesizer_name",
+        ]
         return test_df[column_order]
 
     def _generate_testset_df(self) -> pd.DataFrame:
         from ragas.testset import TestsetGenerator
 
-        documents = self.documents if self.documents is not None else self._load_documents()
+        documents = (
+            self.documents if self.documents is not None else self._load_documents()
+        )
 
         evaluator_llm = self.model.ragas_llm()
         embeddings = self.embedding.ragas_embeddings()
@@ -123,9 +134,11 @@ class RagasTestsetBackend(TestsetBackend):
             goldens.append(
                 Golden(
                     input=str(row["question"]),
-                    expected_output=None
-                    if row.get("ground_truth") is None
-                    else str(row["ground_truth"]),
+                    expected_output=(
+                        None
+                        if row.get("ground_truth") is None
+                        else str(row["ground_truth"])
+                    ),
                     context=list(context) if context is not None else None,
                     metadata={"synthesizer_name": row.get("synthesizer_name")},
                 )

@@ -4,14 +4,15 @@ Task-oriented guides that sit on top of the API reference. Read them in order fo
 or jump to the module you need.
 
 1. [Datasets & Test Cases](01_datasets.md) — `LLMTestCase`, `Golden`, `EvaluationDataset`
-2. [Models](02_models.md) — `Settings`, `AzureOpenAIModel`, both auth styles
+2. [Models](02_models.md) — `AzureSettings`, `AzureOpenAIModel`, both auth styles
 3. [Metrics](03_metrics.md) — the metric catalogue and how to construct them
-4. [Evaluate](04_evaluate.md) — the `evaluate()` engine, availability, `overall_accuracy`
+4. [Evaluate](04_evaluate.md) — the `evaluate()` engine, availability, the unified correctness judge
 5. [Synthesizers](05_synthesizers.md) — alignment / adversarial / RAG, and the swappable engines
 6. [Reporting](06_reporting.md) — exporting results
 
 Runnable code lives in [`examples/`](../../examples/). Architecture and the refactor history are
-in [`REFACTOR_TARGET.md`](../../REFACTOR_TARGET.md) and [`REFACTOR_PHASES.md`](../../REFACTOR_PHASES.md).
+in [`notes/REFACTOR_TARGET.md`](../../notes/REFACTOR_TARGET.md) and
+[`notes/REFACTOR_PHASES.md`](../../notes/REFACTOR_PHASES.md).
 
 ## Install
 
@@ -26,15 +27,17 @@ pip install -e .
 ## 30-second tour
 
 ```python
-from llminspector import (
-    EvaluationDataset, LLMTestCase, Settings, AzureOpenAIModel,
-    FaithfulnessMetric, evaluate, reporting,
-)
+from llminspector import evaluate, reporting
+from llminspector.config import AzureSettings
+from llminspector.dataset import EvaluationDataset
+from llminspector.metrics import FaithfulnessMetric
+from llminspector.models import AzureOpenAIModel
+from llminspector.test_case import LLMTestCase
 
-model = AzureOpenAIModel(Settings.from_env())
+model = AzureOpenAIModel(AzureSettings.from_env())
 dataset = EvaluationDataset(test_cases=[
     LLMTestCase(input="...", actual_output="...", retrieval_context=["..."]),
 ])
 result = evaluate(dataset, [FaithfulnessMetric(model)])
-print(reporting.to_dataframe(result))
+print(result.to_pandas())
 ```

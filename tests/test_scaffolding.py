@@ -33,9 +33,7 @@ def test_version_resolves():
     import llminspector
 
     assert hasattr(llminspector, "__version__")
-    assert llminspector.__version__ is None or isinstance(
-        llminspector.__version__, str
-    )
+    assert llminspector.__version__ is None or isinstance(llminspector.__version__, str)
 
 
 @pytest.mark.parametrize("module", SUBPACKAGES)

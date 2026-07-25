@@ -18,8 +18,9 @@ against a broad metric suite, and **reporting** the results.
   correctness/relevancy, conciseness, context precision/recall/utilisation/relevance/entity
   recall), safety (PII, content moderation, jailbreak, refusal, hallucination, code detection),
   NLP (sentiment, emotion, language, readability, tokens), and policy compliance.
-- **Evaluate** — an async engine (`evaluate()`) with availability filtering, dependency handling,
-  and stable, ordered output.
+- **Evaluate** — an async engine (`a_evaluate()` / `evaluate()`) with availability filtering,
+  rate-limit backoff, visible per-metric failures, and stable, ordered output that the metrics
+  themselves declare.
 - **Synthesizers** — alignment (tag-augment → paraphrase → perturb), adversarial (curated bank /
   red-team seam), and RAG (testset generation + ground-truth refinement), each behind a swappable
   engine so custom generators drop in without a refactor.
@@ -29,7 +30,7 @@ against a broad metric suite, and **reporting** the results.
 
 ### 1. Create a virtual environment
 
-Python 3.9+ is required (developed and tested on 3.12).
+Python 3.12+ is required.
 
 Using [uv](https://github.com/astral-sh/uv) (recommended):
 
@@ -65,19 +66,26 @@ pip install -e .
 
 ```bash
 python -c "import llminspector; print(llminspector.__version__)"
-python examples/01_dataset_roundtrip.py     # runs fully offline
 pytest -q
+```
+
+The offline notebooks are the quickest smoke test:
+
+```bash
+jupyter lab examples/     # then run 01_dataset_roundtrip.ipynb top to bottom
 ```
 
 ## Quickstart
 
 ```python
-from llminspector import (
-    EvaluationDataset, LLMTestCase, Settings, AzureOpenAIModel,
-    FaithfulnessMetric, AnswerCorrectnessMetric, evaluate, reporting,
-)
+from llminspector import evaluate, reporting
+from llminspector.config import AzureSettings
+from llminspector.dataset import EvaluationDataset
+from llminspector.metrics import AnswerCorrectnessMetric, FaithfulnessMetric
+from llminspector.models import AzureOpenAIModel
+from llminspector.test_case import LLMTestCase
 
-model = AzureOpenAIModel(Settings.from_env())
+model = AzureOpenAIModel(AzureSettings.from_env())
 
 dataset = EvaluationDataset(test_cases=[
     LLMTestCase(
@@ -89,16 +97,45 @@ dataset = EvaluationDataset(test_cases=[
 ])
 
 result = evaluate(dataset, [FaithfulnessMetric(model), AnswerCorrectnessMetric(model)])
-print(reporting.to_dataframe(result))
+print(result.to_pandas())
 ```
+
+## Where things live
+
+Each layer owns its own names, so every class has exactly one import path. Only the evaluate
+entry points sit at the package root:
+
+| import from | what it holds |
+|---|---|
+| `llminspector` | `evaluate`, `a_evaluate`, `EvaluationResult`, `__version__` |
+| `llminspector.test_case` | `LLMTestCase` |
+| `llminspector.dataset` | `EvaluationDataset`, `Golden`, `ColumnMapping` |
+| `llminspector.config` | `AzureSettings` |
+| `llminspector.models` | `BaseLLM`, `AzureOpenAIModel`, `AzureOpenAIEmbedding` |
+| `llminspector.metrics` | `BaseMetric` + all 24 metric classes |
+| `llminspector.synthesizer` | the three synthesizers + the engine ABCs |
+| `llminspector.reporting` | `summary`, `errors` |
 
 ## Documentation
 
 - **Usage guides:** [`docs/guides/`](docs/guides/) — datasets, models, metrics, evaluate,
   synthesizers, reporting.
-- **Runnable examples:** [`examples/`](examples/) — scripts + a `getting_started.ipynb` notebook.
-- **Architecture:** [`REFACTOR_TARGET.md`](REFACTOR_TARGET.md) (end-state) and
-  [`REFACTOR_PHASES.md`](REFACTOR_PHASES.md) (build history).
+- **Runnable examples:** [`examples/`](examples/) — five notebooks, from the schema layer to a
+  full synthesize → evaluate → export run.
+
+### Building the API docs locally
+
+The Sphinx build renders [`docs/api.rst`](docs/api.rst) from the package docstrings:
+
+```bash
+pip install -e ".[dev]"        # see the build-backend note above if this fails
+cd docs && make html
+python -m http.server -d _build/html 8000   # then open http://localhost:8000
+```
+
+It needs only `sphinx` and `sphinx-copybutton`. The version shown in the docs comes from the
+installed package metadata, falling back to `dev` in a checkout that was never installed. The
+Markdown guides under `docs/guides/` are read directly and are not part of the Sphinx build.
 
 ## Authors
 

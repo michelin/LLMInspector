@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from llminspector import LLMTestCase
 from llminspector.metrics import (
     AnswerCorrectnessMetric,
     AnswerJailbreakMetric,
@@ -35,10 +34,14 @@ from llminspector.metrics import (
     RefusalMetric,
     SentimentMetric,
     TokenCountMetric,
-    calculate_overall_accuracy,
     calculate_total_tokens,
 )
+from llminspector.metrics.rag import (
+    ANSWER_CORRECTNESS_NO_CONTEXT_PROMPT,
+    ANSWER_CORRECTNESS_PROMPT,
+)
 from llminspector.metrics.safety import extract_content_filter_simple
+from llminspector.test_case import LLMTestCase
 
 
 def _tc(**kwargs):
@@ -49,6 +52,7 @@ def _tc(**kwargs):
 # --------------------------------------------------------------------------- #
 # LLM-judge JSON metrics (rag.py)
 # --------------------------------------------------------------------------- #
+
 
 def test_faithfulness_parses_score_and_reason():
     m = FaithfulnessMetric()
@@ -68,6 +72,124 @@ def test_answer_correctness_parses_score():
     tc = _tc(actual_output="a", expected_output="gt")
     assert m.measure(tc) == 0.4
     assert m.reason == "gaps"
+
+
+# -- the unified judge (Phase 8.1) -----------------------------------------
+
+
+def _captured_prompt(mock):
+    """First positional arg of the recorded _arun_prompt call (the template)."""
+    return mock.call_args[0][0]
+
+
+def test_answer_correctness_three_factor_mode_with_context():
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(
+        return_value=(
+            '{"answer_correctness": 1.0, "gt_agreement": 0.8, '
+            '"faithfulness": 1.0, "relevancy": 1.0, '
+            '"answer_correctness_reasoning": "extra fact is context-supported"}'
+        )
+    )
+    tc = _tc(actual_output="a", expected_output="gt", retrieval_context=["c"])
+    assert m.measure(tc) == 1.0
+
+    assert _captured_prompt(m._arun_prompt) is ANSWER_CORRECTNESS_PROMPT
+    # the context reaches the judge alongside the ground truth
+    assert m._arun_prompt.call_args[0][1] == [
+        "question",
+        "answer",
+        "ground_truth",
+        "context",
+    ]
+    assert m._arun_prompt.call_args[0][2]["context"] == ["c"]
+
+    assert m.expand(m.score) == {
+        "answer_correctness": 1.0,
+        "answer_correctness_gt_agreement": 0.8,
+        "answer_correctness_faithfulness": 1.0,
+        "answer_correctness_relevancy": 1.0,
+    }
+
+
+def test_answer_correctness_two_factor_mode_without_context():
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(
+        return_value=(
+            '{"answer_correctness": 0.4, "gt_agreement": 0.4, "relevancy": 0.9, '
+            '"answer_correctness_reasoning": "coverage gaps"}'
+        )
+    )
+    tc = _tc(actual_output="a", expected_output="gt")
+    assert m.measure(tc) == 0.4
+
+    assert _captured_prompt(m._arun_prompt) is ANSWER_CORRECTNESS_NO_CONTEXT_PROMPT
+    assert m._arun_prompt.call_args[0][1] == ["question", "answer", "ground_truth"]
+    assert "context" not in m._arun_prompt.call_args[0][2]
+
+    # faithfulness is undefined without a context and stays None
+    assert m.expand(m.score) == {
+        "answer_correctness": 0.4,
+        "answer_correctness_gt_agreement": 0.4,
+        "answer_correctness_faithfulness": None,
+        "answer_correctness_relevancy": 0.9,
+    }
+
+
+@pytest.mark.parametrize("ctx", [None, [], ["   "], ["", "  "]])
+def test_answer_correctness_blank_context_uses_two_factor_mode(ctx):
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(return_value='{"answer_correctness": 0.5}')
+    m.measure(_tc(actual_output="a", expected_output="gt", retrieval_context=ctx))
+    assert _captured_prompt(m._arun_prompt) is ANSWER_CORRECTNESS_NO_CONTEXT_PROMPT
+
+
+def test_answer_correctness_context_never_gates_availability():
+    # retrieval_context is read when present but must not be a required input,
+    # otherwise non-RAG rows would be skipped instead of degrading to 2 factors.
+    assert "retrieval_context" not in AnswerCorrectnessMetric.required_inputs
+
+
+def test_answer_correctness_prompt_states_the_dont_penalise_rule():
+    # The rule is the whole reason the judge was unified; if it is ever dropped
+    # from the prompt the metric silently reverts to the old behaviour.
+    assert "must **NOT** be penalised" in ANSWER_CORRECTNESS_PROMPT
+    assert "supported by the Context" in ANSWER_CORRECTNESS_PROMPT
+    assert "relevant to the Question" in ANSWER_CORRECTNESS_PROMPT
+    # ...and the two-factor prompt must not ask for faithfulness at all.
+    assert "faithfulness cannot be assessed" in ANSWER_CORRECTNESS_NO_CONTEXT_PROMPT
+
+
+def test_answer_correctness_sub_scores_cleared_on_failure():
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(
+        return_value='{"answer_correctness": 1.0, "gt_agreement": 1.0}'
+    )
+    m.measure(_tc(actual_output="a", expected_output="gt"))
+    assert m.sub_scores["gt_agreement"] == 1.0
+
+    m._arun_prompt = AsyncMock(side_effect=RuntimeError("401"))
+    assert m.measure(_tc(actual_output="a", expected_output="gt")) is None
+    assert m.sub_scores == {
+        "gt_agreement": None,
+        "faithfulness": None,
+        "relevancy": None,
+    }
+
+
+def test_answer_correctness_clone_resets_sub_scores():
+    m = AnswerCorrectnessMetric()
+    m._arun_prompt = AsyncMock(
+        return_value='{"answer_correctness": 1.0, "gt_agreement": 1.0}'
+    )
+    m.measure(_tc(actual_output="a", expected_output="gt"))
+    clone = m.clone()
+    assert clone.sub_scores == {
+        "gt_agreement": None,
+        "faithfulness": None,
+        "relevancy": None,
+    }
+    assert m.sub_scores["gt_agreement"] == 1.0  # original untouched
 
 
 def test_answer_relevancy_and_conciseness():
@@ -90,6 +212,7 @@ def test_json_metric_error_sets_none():
 # ragas context metrics (rag.py) — mock _sample + _scorer
 # --------------------------------------------------------------------------- #
 
+
 class _FakeScorer:
     def __init__(self, value):
         self._value = value
@@ -102,8 +225,14 @@ class _FakeScorer:
     "cls, kwargs",
     [
         (ContextPrecisionMetric, dict(expected_output="gt", retrieval_context=["c"])),
-        (ContextRecallMetric, dict(actual_output="a", expected_output="gt", retrieval_context=["c"])),
-        (ContextEntityRecallMetric, dict(expected_output="gt", retrieval_context=["c"])),
+        (
+            ContextRecallMetric,
+            dict(actual_output="a", expected_output="gt", retrieval_context=["c"]),
+        ),
+        (
+            ContextEntityRecallMetric,
+            dict(expected_output="gt", retrieval_context=["c"]),
+        ),
     ],
 )
 def test_ragas_context_metric_rounds(cls, kwargs):
@@ -128,6 +257,7 @@ def test_ragas_context_metric_error_returns_none():
 # quality.py — BERTScore
 # --------------------------------------------------------------------------- #
 
+
 def test_bertscore_mean_f1():
     class _F1:
         def mean(self):
@@ -146,6 +276,7 @@ def test_bertscore_mean_f1():
 # --------------------------------------------------------------------------- #
 # nlp.py — Sentiment, Emotion, Language, Readability, TokenCount
 # --------------------------------------------------------------------------- #
+
 
 def test_sentiment_and_emotion_labels():
     s = SentimentMetric(target="input")
@@ -196,6 +327,7 @@ def test_token_count(monkeypatch):
 # safety.py
 # --------------------------------------------------------------------------- #
 
+
 def test_pii_detection_filters_low_scores():
     class _R:
         def __init__(self, entity_type, score):
@@ -222,9 +354,15 @@ def test_code_detect_parses_json():
 
 def test_content_moderation_happy_path():
     flags = {
-        "hate_speech": 0, "fairness": 1, "sexually_explicit_information": 0,
-        "violence": 0, "self_harm": 0, "dangerous_content": 0,
-        "harassment": 0, "profanity": 1, "toxicity": 0,
+        "hate_speech": 0,
+        "fairness": 1,
+        "sexually_explicit_information": 0,
+        "violence": 0,
+        "self_harm": 0,
+        "dangerous_content": 0,
+        "harassment": 0,
+        "profanity": 1,
+        "toxicity": 0,
     }
     import json
 
@@ -269,6 +407,15 @@ def test_refusal_direct_and_regex():
     assert m2.measure(_tc(input="q", actual_output="Sure, here is...")) == 0
 
 
+def test_refusal_response_without_a_verdict_fails_cleanly():
+    """A judge reply with no 0/1 anywhere used to raise AttributeError from
+    ``re.search(...).group()`` — an uncaught crash, not a metric failure."""
+    m = RefusalMetric()
+    m._arun_prompt = AsyncMock(return_value="I am not sure what you mean")
+    assert m.measure(_tc(input="q", actual_output="a")) == ""
+    assert m.error is not None and "no 0/1 verdict" in m.error
+
+
 def test_hallucination_int():
     m = HallucinationMetric()
     m._arun_prompt = AsyncMock(return_value="0")
@@ -285,6 +432,7 @@ def test_extract_content_filter_simple():
 # --------------------------------------------------------------------------- #
 # policy.py
 # --------------------------------------------------------------------------- #
+
 
 def test_policy_violation_true():
     m = PolicyComplianceMetric()
@@ -319,30 +467,21 @@ def test_policy_null_reason_becomes_string_none():
 # aggregate.py
 # --------------------------------------------------------------------------- #
 
-def test_overall_accuracy_three_metrics():
-    r = {"answer_correctness": 1.0, "faithfulness": 0.5, "answer_relevancy": 0.5}
-    # 0.5*1 + 0.3*0.5 + 0.2*0.5 = 0.75
-    assert calculate_overall_accuracy(r) == 0.75
-
-
-def test_overall_accuracy_two_metrics():
-    r = {"answer_correctness": 1.0, "answer_relevancy": 0.0}
-    # 0.75*1 + 0.25*0 = 0.75
-    assert calculate_overall_accuracy(r) == 0.75
-
-
-def test_overall_accuracy_insufficient():
-    assert calculate_overall_accuracy({"faithfulness": 0.9}) is None
-
 
 def test_total_tokens():
-    assert calculate_total_tokens({"question_tokens": 3, "answer_tokens": 5})["total_tokens"] == 8
+    assert (
+        calculate_total_tokens({"question_tokens": 3, "answer_tokens": 5})[
+            "total_tokens"
+        ]
+        == 8
+    )
     assert calculate_total_tokens({"question_tokens": 3})["total_tokens"] is None
 
 
 # --------------------------------------------------------------------------- #
 # base_metric threshold semantics
 # --------------------------------------------------------------------------- #
+
 
 def test_is_successful_numeric_threshold():
     m = AnswerRelevancyMetric(threshold=0.7)

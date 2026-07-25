@@ -3,8 +3,8 @@
 Covers the parts runnable without transformers/ragas: perturbations (incl. the
 two bug fixes), the curated-bank adversarial source (pure pandas, real sample),
 the alignment perturbation stage (paraphrased df injected to skip T5), the
-stable BaseSynthesizer contract via fake engines, and the evaluate()-backed
-rag_evaluation wrapper.
+stable BaseSynthesizer contract via fake engines, and the split construction
+paths introduced in Phase 8.6.
 """
 
 import random
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from llminspector import EvaluationDataset, Golden, LLMTestCase
+from llminspector.dataset import EvaluationDataset, Golden
 from llminspector.synthesizer import (
     AdversarialSynthesizer,
     AlignmentSynthesizer,
@@ -22,11 +22,16 @@ from llminspector.synthesizer import (
 )
 from llminspector.synthesizer import perturbations as p
 from llminspector.synthesizer.engines import CuratedBankSource
-from llminspector.synthesizer.engines.base import AlignmentEngine, AttackSource, TestsetBackend
+from llminspector.synthesizer.engines.base import (
+    AlignmentEngine,
+    AttackSource,
+    TestsetBackend,
+)
 from llminspector.synthesizer.engines.legacy_alignment import (
     LegacyTagT5Engine,
     _dataframe_to_goldens,
 )
+from llminspector.test_case import LLMTestCase
 
 SAMPLE_ADVERSARIAL = "tests/test_sample/test_adversarialdata.xlsx"
 
@@ -34,6 +39,7 @@ SAMPLE_ADVERSARIAL = "tests/test_sample/test_adversarialdata.xlsx"
 # --------------------------------------------------------------------------- #
 # Golden.metadata
 # --------------------------------------------------------------------------- #
+
 
 def test_golden_metadata_defaults_and_roundtrip():
     g = Golden(input="q")
@@ -45,6 +51,7 @@ def test_golden_metadata_defaults_and_roundtrip():
 # --------------------------------------------------------------------------- #
 # perturbations (with the two bug fixes)
 # --------------------------------------------------------------------------- #
+
 
 def test_add_contraction_actually_transforms():
     # legacy bug: returned the unmodified input
@@ -73,6 +80,7 @@ def test_add_typo_changes_length_or_chars():
 # Adversarial (curated bank — pure pandas)
 # --------------------------------------------------------------------------- #
 
+
 def test_curated_bank_capability_filter():
     bank = pd.DataFrame(
         {
@@ -96,19 +104,34 @@ def test_adversarial_synthesizer_from_sample_file():
     assert isinstance(dataset, EvaluationDataset)
     assert len(dataset.goldens) > 0
     # every golden carries the adversarial metadata columns
-    assert set(dataset.goldens[0].metadata) == {"Capability", "Sub Capability", "Char Len"}
+    assert set(dataset.goldens[0].metadata) == {
+        "Capability",
+        "Sub Capability",
+        "Char Len",
+    }
     out_df = synth.to_pandas()
     assert "Capability" in out_df.columns and "input" in out_df.columns
 
 
-def test_adversarial_requires_bank_or_source():
-    with pytest.raises(ValueError):
+def test_adversarial_construction_paths_are_separate():
+    """8.6: the constructor takes a source; from_* build the default one."""
+    # the runtime ValueError is gone — a missing source is now a TypeError
+    with pytest.raises(TypeError):
         AdversarialSynthesizer()
+
+    synth = AdversarialSynthesizer.from_excel(SAMPLE_ADVERSARIAL, capability="all")
+    assert isinstance(synth.source, CuratedBankSource)
+
+    from_df = AdversarialSynthesizer.from_dataframe(
+        pd.read_excel(SAMPLE_ADVERSARIAL), capability="all"
+    )
+    assert isinstance(from_df.source, CuratedBankSource)
 
 
 # --------------------------------------------------------------------------- #
 # Alignment perturbation stage (skip T5 via injected paraphrased df)
 # --------------------------------------------------------------------------- #
+
 
 def test_alignment_transform_stage_applies_perturbation():
     np.random.seed(0)
@@ -143,17 +166,23 @@ def test_alignment_transform_stage_applies_perturbation():
 # Stable contract via fake engines
 # --------------------------------------------------------------------------- #
 
+
 class _FakeEngine(AlignmentEngine):
     def generate(self):
         return [Golden(input="p1", metadata={"augmentation_type": "T"})]
 
 
 def test_alignment_synthesizer_accepts_injected_engine():
-    synth = AlignmentSynthesizer(engine=_FakeEngine())
+    synth = AlignmentSynthesizer(_FakeEngine())
     dataset = synth.generate()
     assert dataset.goldens[0].input == "p1"
     df = synth.to_pandas()
-    assert list(df.columns) == ["input", "expected_output", "context", "augmentation_type"]
+    assert list(df.columns) == [
+        "input",
+        "expected_output",
+        "context",
+        "augmentation_type",
+    ]
 
 
 def test_goldens_to_dataframe_unions_metadata():
@@ -170,40 +199,69 @@ def test_goldens_to_dataframe_unions_metadata():
 # RagSynthesizer wrappers
 # --------------------------------------------------------------------------- #
 
+
 class _FakeBackend(TestsetBackend):
     def generate(self):
         return [
-            Golden(input="q1", expected_output="gt1", context=["c1"],
-                   metadata={"synthesizer_name": "fake"}),
+            Golden(
+                input="q1",
+                expected_output="gt1",
+                context=["c1"],
+                metadata={"synthesizer_name": "fake"},
+            ),
         ]
 
 
 def test_rag_generate_stores_dataset():
-    synth = RagSynthesizer(backend=_FakeBackend())
+    synth = RagSynthesizer(_FakeBackend())
     dataset = synth.generate()
     assert synth.dataset is dataset  # never-set gap fixed
     assert dataset.goldens[0].expected_output == "gt1"
 
 
-def test_rag_evaluation_delegates_to_evaluate():
-    from llminspector.metrics.base_metric import BaseMetric
-
-    class _FakeMetric(BaseMetric):
-        metric_name = "answer_sentiment"
-        required_inputs = {"actual_output"}
-
-        async def a_measure(self, tc):
-            self.score = "Positive"
-            return self.score
-
-    synth = RagSynthesizer(backend=_FakeBackend())
-    answered = EvaluationDataset(
-        test_cases=[LLMTestCase(input="q1", actual_output="a1")]
-    )
-    result = synth.rag_evaluation(answered, [_FakeMetric()], show_progress=False)
-    assert result.rows[0]["answer_sentiment"] == "Positive"
+def test_rag_evaluation_wrappers_are_gone():
+    """8.6: they forwarded to evaluate() / result.to_excel() and added nothing."""
+    synth = RagSynthesizer(_FakeBackend())
+    assert not hasattr(synth, "rag_evaluation")
+    assert not hasattr(synth, "export_eval")
 
 
-def test_rag_requires_backend_or_models():
-    with pytest.raises(ValueError):
+def test_rag_construction_paths_are_separate():
+    with pytest.raises(TypeError):
         RagSynthesizer()
+    assert isinstance(RagSynthesizer(_FakeBackend()).backend, _FakeBackend)
+
+
+# --------------------------------------------------------------------------- #
+# Declared metadata keys (Phase 8.6)
+# --------------------------------------------------------------------------- #
+
+
+def test_every_engine_declares_its_metadata_keys():
+    from llminspector.synthesizer.engines import (
+        CuratedBankSource,
+        LegacyTagT5Engine,
+        RagasTestsetBackend,
+    )
+
+    for cls in (CuratedBankSource, LegacyTagT5Engine, RagasTestsetBackend):
+        assert cls.metadata_keys, f"{cls.__name__} declares no metadata_keys"
+        assert isinstance(cls.metadata_keys, tuple)
+
+
+def test_declared_keys_match_what_the_source_actually_emits():
+    """The declaration is only useful if it stays true."""
+    synth = AdversarialSynthesizer.from_excel(SAMPLE_ADVERSARIAL, capability="all")
+    dataset = synth.generate()
+    assert set(dataset.goldens[0].metadata) == set(synth.metadata_keys)
+
+
+def test_output_columns_are_knowable_before_generating():
+    synth = AdversarialSynthesizer.from_excel(SAMPLE_ADVERSARIAL, capability="all")
+    expected = ["input", "expected_output", "context", *synth.metadata_keys]
+    assert list(synth.to_pandas().columns) == expected
+
+
+def test_synthesizers_expose_the_engine_keys():
+    assert AlignmentSynthesizer(_FakeEngine()).metadata_keys == ()
+    assert RagSynthesizer(_FakeBackend()).metadata_keys == ()

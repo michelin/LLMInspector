@@ -1,7 +1,7 @@
 """Class-based metrics — ``BaseMetric`` and concrete metrics (Phase 3)."""
 
-from .aggregate import calculate_overall_accuracy, calculate_total_tokens
-from .base_metric import BaseMetric, DualTargetMetric
+from .aggregate import calculate_total_tokens
+from .base_metric import BaseMetric, DualTargetMetric, RagasBackedMetric
 from .nlp import (
     EmotionMetric,
     LanguageDetectionMetric,
@@ -35,6 +35,7 @@ from .safety import (
 __all__ = [
     "BaseMetric",
     "DualTargetMetric",
+    "RagasBackedMetric",
     # quality
     "BertScoreMetric",
     # rag
@@ -64,6 +65,5 @@ __all__ = [
     # policy
     "PolicyComplianceMetric",
     # aggregate
-    "calculate_overall_accuracy",
     "calculate_total_tokens",
 ]

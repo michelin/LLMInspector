@@ -11,7 +11,7 @@ The schema layer. Three types:
 ## LLMTestCase
 
 ```python
-from llminspector import LLMTestCase
+from llminspector.test_case import LLMTestCase
 
 tc = LLMTestCase(
     input="What is the capital of France?",   # required (non-empty)
@@ -38,7 +38,7 @@ Field names are DeepEval-shaped and map onto the legacy five inputs:
 ## EvaluationDataset
 
 ```python
-from llminspector import EvaluationDataset
+from llminspector.dataset import EvaluationDataset
 
 # From a spreadsheet (default column names: question/answer/ground_truth/contexts/policy)
 dataset = EvaluationDataset.from_excel("data.xlsx")
@@ -62,7 +62,7 @@ For synthesis seeds, use the golden variants: `goldens_from_excel` / `goldens_fr
 ## Golden
 
 ```python
-from llminspector import Golden
+from llminspector.dataset import Golden
 
 g = Golden(input="...", expected_output="...", context=["..."], metadata={"capability": "toxicity"})
 ```

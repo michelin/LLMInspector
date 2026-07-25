@@ -1,5 +1,5 @@
-"""Configuration layer — code-driven ``Settings`` (Phase 1)."""
+"""Configuration layer — code-driven settings (Phase 1)."""
 
-from .settings import Settings
+from .settings import AzureSettings, Settings
 
-__all__ = ["Settings"]
+__all__ = ["AzureSettings", "Settings"]

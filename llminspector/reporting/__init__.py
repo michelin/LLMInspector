@@ -1,5 +1,9 @@
-"""Reporting — result exporters (Phase 6)."""
+"""Reporting — analysis over an ``EvaluationResult`` (Phase 6).
 
-from .exporters import summary, to_dataframe, to_excel
+Serialization lives on the result object (``result.to_pandas()`` /
+``result.to_excel(path)``); this namespace holds what reporting adds on top.
+"""
 
-__all__ = ["to_dataframe", "to_excel", "summary"]
+from .exporters import errors, summary
+
+__all__ = ["summary", "errors"]

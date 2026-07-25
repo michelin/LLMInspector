@@ -15,6 +15,8 @@ class KeywordNotFoundException(Exception):
         super().__init__(f"{message}: {tag_value}")
 
 
+# Name ported verbatim from the legacy alignment_replace_function module.
+# pylint: disable=invalid-name
 class tag_replace:
     def convert_keys_to_lower(self, org_dict):
         return {key.lower(): value for key, value in org_dict.items()}

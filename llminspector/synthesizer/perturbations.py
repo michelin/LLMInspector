@@ -14,6 +14,7 @@ Lookup tables come from :mod:`llminspector.data`. Two legacy bugs are fixed:
 
 from __future__ import annotations
 
+import logging
 import random
 import re
 from collections import defaultdict
@@ -22,6 +23,8 @@ from functools import lru_cache
 from typing import List, Optional
 
 from ..data import CONTRACTION_MAP, abbreviation_dict, ocr_typo_dict
+
+logger = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
@@ -62,7 +65,7 @@ def lowercase_transform(sample_list, prob: float = 1.0) -> List[str]:
 
 def titlecase_transform(sample_list, prob: float = 1.0) -> List[str]:
     perturbed_samples = []
-    for idx, sample in enumerate(sample_list):
+    for sample in sample_list:
         if isinstance(sample, str):
             words = sample.split()
             num_transform_words = int(prob * len(words))
@@ -97,7 +100,11 @@ def add_punctuation(
 
 
 def strip_punctuation(
-    sample_list, prob: float = 1.0, whitelist: Optional[list] = None, count: int = 1
+    sample_list,
+    prob: float = 1.0,
+    whitelist: Optional[list] = None,
+    # kept for signature parity with add_punctuation
+    count: int = 1,  # pylint: disable=unused-argument
 ) -> List[str]:
     if whitelist is None:
         whitelist = ["!", "?", ",", ".", "-", ":", ";"]
@@ -129,11 +136,11 @@ def add_typo(sample_list, error_rate: float = 0.5) -> List[str]:
                     word = word[:pos] + char_to_insert + word[pos:]
                 elif typo_type == "delete":
                     pos = random.randint(0, len(word) - 1)
-                    word = word[:pos] + word[pos + 1:]
+                    word = word[:pos] + word[pos + 1 :]
                 elif typo_type == "substitute":
                     pos = random.randint(0, len(word) - 1)
                     char_to_substitute = random.choice("abcdefghijklmnopqrstuvwxyz")
-                    word = word[:pos] + char_to_substitute + word[pos + 1:]
+                    word = word[:pos] + char_to_substitute + word[pos + 1 :]
             typoed_words.append(word)
         perturbed_samples.append(" ".join(typoed_words))
     return perturbed_samples
@@ -148,7 +155,8 @@ def add_context(
     count: int = 1,
 ) -> List[str]:
     if starting_context is None or ending_context is None:
-        from ..data import ending_context as _ec, starting_context as _sc
+        from ..data import ending_context as _ec
+        from ..data import starting_context as _sc
 
         if starting_context is None:
             starting_context = _sc
@@ -160,9 +168,9 @@ def add_context(
         if strategy is None:
             strategy = random.choice(possible_methods)
         elif strategy not in possible_methods:
-            print("strategy not in possible methods.")
+            logger.warning("Strategy %r is not a known perturbation.", strategy)
 
-        if (strategy == "start" or strategy == "combined") and random.random() < prob:
+        if strategy in ("start", "combined") and random.random() < prob:
             add_tokens = random.choice(starting_context)
             add_string = (
                 " ".join(add_tokens) if isinstance(add_tokens, list) else add_tokens
@@ -170,7 +178,7 @@ def add_context(
             if text != "-":
                 text = add_string + " " + text
 
-        if (strategy == "end" or strategy == "combined") and random.random() < prob:
+        if strategy in ("end", "combined") and random.random() < prob:
             add_tokens = random.choice(ending_context)
             add_string = (
                 " ".join(add_tokens) if isinstance(add_tokens, list) else add_tokens

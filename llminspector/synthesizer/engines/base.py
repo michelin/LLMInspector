@@ -13,35 +13,39 @@ output contract.
 
 Every engine returns ``List[Golden]`` so the synthesizer can wrap it in an
 ``EvaluationDataset`` uniformly, regardless of how the goldens were produced.
+
+``Golden.metadata`` is the escape hatch that makes that uniformity possible —
+each engine hangs its own extra columns there. The cost is that the output shape
+was undiscoverable without running the engine, so every engine now declares
+``metadata_keys`` and ``to_pandas()``'s column set is knowable up front.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Tuple
 
 from ...dataset.golden import Golden
 
 
-class AlignmentEngine(ABC):
+class _GoldenSource(ABC):
+    """Shared contract: produce goldens, and declare the columns they carry."""
+
+    #: Keys this engine puts in ``Golden.metadata``, in export order. These
+    #: become the trailing columns of ``BaseSynthesizer.to_pandas()``.
+    metadata_keys: Tuple[str, ...] = ()
+
+    @abstractmethod
+    def generate(self) -> List[Golden]: ...
+
+
+class AlignmentEngine(_GoldenSource):
     """Produces alignment goldens (augmented/paraphrased/perturbed prompts)."""
 
-    @abstractmethod
-    def generate(self) -> List[Golden]:
-        ...
 
-
-class TestsetBackend(ABC):
+class TestsetBackend(_GoldenSource):
     """Produces RAG goldens (question / ground_truth / context) from documents."""
 
-    @abstractmethod
-    def generate(self) -> List[Golden]:
-        ...
 
-
-class AttackSource(ABC):
+class AttackSource(_GoldenSource):
     """Produces adversarial goldens (attack prompts by capability)."""
-
-    @abstractmethod
-    def generate(self) -> List[Golden]:
-        ...

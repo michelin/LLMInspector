@@ -11,6 +11,7 @@ This whole class is the seam a future custom, ML-free alignment engine replaces.
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import Dict, List, Optional, Tuple
 
@@ -22,10 +23,24 @@ from .. import perturbations
 from ..alignment_tag import KeywordNotFoundException, tag_replace
 from .base import AlignmentEngine
 
+logger = logging.getLogger(__name__)
+
 _T5_MODEL = "humarin/chatgpt_paraphraser_on_T5_base"
 
 
 class LegacyTagT5Engine(AlignmentEngine):
+    """Tag-augment -> HF-T5 paraphrase -> perturb."""
+
+    #: declared so to_pandas()'s column set is knowable without running it
+    metadata_keys = (
+        "capability",
+        "subcapability",
+        "input_prompt",
+        "exploded_prompt",
+        "paraphrased_prompt",
+        "augmentation_type",
+    )
+
     def __init__(
         self,
         alignment_df: pd.DataFrame,
@@ -72,7 +87,7 @@ class LegacyTagT5Engine(AlignmentEngine):
                 tag_list_infile.append(tag)
 
         unique_tag_list_infile = list(set(tag_list_infile))
-        print("Tag key found in the file : ", unique_tag_list_infile)
+        logger.info("Tag keys found in the file: %s", unique_tag_list_infile)
 
         for tag_key in unique_tag_list_infile:
             for aug_key, aug_value in augmentation_dict.items():
@@ -114,7 +129,7 @@ class LegacyTagT5Engine(AlignmentEngine):
                         else:
                             raise KeywordNotFoundException(tag_value)
                     except KeywordNotFoundException as e:
-                        print("Error:", e)
+                        logger.warning("Tag replacement failed: %s", e)
 
     def alignment_data(self) -> pd.DataFrame:
         self.checklist_tagaugmentation()
@@ -124,9 +139,7 @@ class LegacyTagT5Engine(AlignmentEngine):
                 self.exploded_prompt1.append(self.alignment_df1["UserInput"][t])
                 self.input_prompt1.append(self.alignment_df1["UserInput"][t])
                 self.augmentation_type1.append("None")
-                self.expected_response1.append(
-                    self.alignment_df1["Expected_Result"][t]
-                )
+                self.expected_response1.append(self.alignment_df1["Expected_Result"][t])
 
         for i in range(len(self.exploded_prompt)):
             if (
@@ -192,7 +205,9 @@ class LegacyTagT5Engine(AlignmentEngine):
                 truncation=True,
             ).input_ids
 
-            input_prompt_list.append([input_df["input_prompt"][i]] * num_return_sequences)
+            input_prompt_list.append(
+                [input_df["input_prompt"][i]] * num_return_sequences
+            )
             exploded_prompt_list.append(
                 [input_df["exploded_prompt"][i]] * num_return_sequences
             )
@@ -223,7 +238,13 @@ class LegacyTagT5Engine(AlignmentEngine):
             flat_augmentation = [x for sub in augmentation_type_list for x in sub]
 
             zipped = list(
-                zip(flat_input, flat_exploded, flat_paraphrased, flat_expected, flat_augmentation)
+                zip(
+                    flat_input,
+                    flat_exploded,
+                    flat_paraphrased,
+                    flat_expected,
+                    flat_augmentation,
+                )
             )
             df_out = pd.DataFrame(
                 zipped,
@@ -241,21 +262,25 @@ class LegacyTagT5Engine(AlignmentEngine):
     # -- stage 3: perturbation -----------------------------------------------
 
     _PERTURBATIONS = {
-        "uppercase": lambda s: perturbations.uppercase_transform(s),
-        "lowercase": lambda s: perturbations.lowercase_transform(s),
-        "titlecase": lambda s: perturbations.titlecase_transform(s),
-        "add_punctuation": lambda s: perturbations.add_punctuation(s),
-        "strip_punctuation": lambda s: perturbations.strip_punctuation(s),
-        "typo": lambda s: perturbations.add_typo(s),
-        "context": lambda s: perturbations.add_context(s),
-        "contract": lambda s: perturbations.add_contraction(s),
-        "ocr_typo": lambda s: perturbations.add_ocr_typo(s),
-        "abbreviate": lambda s: perturbations.add_abbreviation(s),
+        "uppercase": perturbations.uppercase_transform,
+        "lowercase": perturbations.lowercase_transform,
+        "titlecase": perturbations.titlecase_transform,
+        "add_punctuation": perturbations.add_punctuation,
+        "strip_punctuation": perturbations.strip_punctuation,
+        "typo": perturbations.add_typo,
+        "context": perturbations.add_context,
+        "contract": perturbations.add_contraction,
+        "ocr_typo": perturbations.add_ocr_typo,
+        "abbreviate": perturbations.add_abbreviation,
     }
 
-    def transform_df(self, paraphrased_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
-        alignment_df = paraphrased_df if paraphrased_df is not None else self.paraphrase_prompts(
-            self.alignment_data()
+    def transform_df(
+        self, paraphrased_df: Optional[pd.DataFrame] = None
+    ) -> pd.DataFrame:
+        alignment_df = (
+            paraphrased_df
+            if paraphrased_df is not None
+            else self.paraphrase_prompts(self.alignment_data())
         )
 
         if "capability" not in alignment_df.columns:
@@ -266,7 +291,7 @@ class LegacyTagT5Engine(AlignmentEngine):
         for subcapability, (capability, probability) in self.augmentations.items():
             mask = np.random.rand(len(alignment_df)) < probability
             filter_df = alignment_df[mask].copy()
-            print(f"augmentation key: {subcapability}")
+            logger.debug("Augmentation key: %s", subcapability)
             samples = filter_df["paraphrased_prompt"]
 
             transform = self._PERTURBATIONS.get(subcapability)
@@ -292,7 +317,7 @@ class LegacyTagT5Engine(AlignmentEngine):
                     [self.result_pertubated_df, filter_df], ignore_index=True
                 )
             else:
-                print(f"The augmentation type {subcapability} doest not exist")
+                logger.warning("Unknown augmentation type: %s", subcapability)
 
         return self.result_pertubated_df
 

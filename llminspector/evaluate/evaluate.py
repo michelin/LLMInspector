@@ -6,12 +6,19 @@ Ports ``helper.py``'s async pipeline onto the Phase 3 metric objects:
 * batches with a tqdm progress bar,
 * availability filtering (a metric runs only when its ``required_inputs`` are
   present on the test case),
-* dependency auto-add (``answer_correctness`` pulls in ``faithfulness`` /
-  ``answer_relevancy`` for the ``overall_accuracy`` blend, then drops them from
-  the output if the caller did not request them),
-* result column-expansion (code detect / content moderation / policy),
-* ``overall_accuracy`` overwriting ``answer_correctness`` and ``total_tokens``,
-* ``reorder_results`` column ordering.
+* ``total_tokens``,
+* column ordering.
+
+The engine runs exactly the metrics it is handed. It used to silently add
+``faithfulness`` / ``answer_relevancy`` behind the caller's back to feed the
+``overall_accuracy`` blend and then null them out again; Phase 8.1 folded all
+three factors into the ``answer_correctness`` judge itself, so the auto-add, the
+blend, and the column overwrite are all gone.
+
+**This module knows no metric names.** Phase 8.2 moved the output contract onto
+the metrics: each one declares the columns it owns (``expand`` /
+``output_columns``) and where they sit in the table (``sort_key``). Adding a
+metric touches only that metric's file.
 
 Two intentional divergences from the legacy code, both noted inline:
 1. Batch results are reassembled **in input order** (the legacy
@@ -24,48 +31,16 @@ Two intentional divergences from the legacy code, both noted inline:
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List, Optional, Sequence
+import logging
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..dataset.dataset import EvaluationDataset
-from ..metrics.aggregate import calculate_overall_accuracy, calculate_total_tokens
+from ..metrics.aggregate import calculate_total_tokens
 from ..metrics.base_metric import BaseMetric
 from ..test_case.test_case import LLMTestCase
 from .result import EvaluationResult
 
-# answer_correctness is reported as the overall_accuracy blend, which needs
-# these two computed even when the caller didn't ask for them.
-_ACCURACY_DEPENDENCIES = ("faithfulness", "answer_relevancy")
-
-_REORDER_KEYS = [
-    "question_emotion", "question_sentiment", "question_language",
-    "question_pii_detected", "question_flesch_kincaid_grade", "question_tokens",
-    "question_code_detected", "question_code_language",
-    "answer_emotion", "answer_sentiment", "answer_language",
-    "answer_pii_detected", "answer_flesch_kincaid_grade", "answer_tokens",
-    "answer_no_refusal",
-    "answer_code_detected", "answer_code_language",
-    "bert_score",
-    "faithfulness", "faithfulness_reasoning",
-    "answer_correctness", "answer_correctness_reasoning",
-    "answer_relevancy", "answer_relevancy_reasoning",
-    "conciseness", "conciseness_reasoning",
-    "context_relevance", "context_utilisation", "context_entity_recall",
-    "context_precision", "context_recall",
-    "question_jailbreak_risk", "answer_jailbreak_risk", "answer_hallucination_risk",
-    "question_hate_speech", "question_fairness", "question_sexually_explicit_information",
-    "question_violence", "question_self_harm", "question_dangerous_content",
-    "question_harassment", "question_profanity", "question_toxicity_risk",
-    "answer_hate_speech", "answer_fairness", "answer_sexually_explicit_information",
-    "answer_violence", "answer_self_harm", "answer_dangerous_content",
-    "answer_harassment", "answer_profanity", "answer_toxicity_risk",
-    "is_policy_violated", "policy_violation_reason",
-    "total_tokens",
-]
-
-_MODERATION_SUBKEYS = [
-    "hate_speech", "fairness", "sexually_explicit_information", "violence",
-    "self_harm", "dangerous_content", "harassment", "profanity", "toxicity_risk",
-]
+logger = logging.getLogger(__name__)
 
 
 class _NullProgressBar:
@@ -92,6 +67,7 @@ def _make_progress_bar(total: int, show_progress: bool):
 # availability
 # --------------------------------------------------------------------------- #
 
+
 def _availability(test_case: LLMTestCase) -> Dict[str, bool]:
     """Which LLMTestCase attributes are populated (mirrors legacy check)."""
     ctx = test_case.retrieval_context
@@ -115,58 +91,26 @@ def _metric_available(metric: BaseMetric, avail: Dict[str, bool]) -> bool:
 
 
 # --------------------------------------------------------------------------- #
-# result column-expansion (ported from helper.py)
+# column ordering
 # --------------------------------------------------------------------------- #
 
-def _expand_code_detect(results: Dict[str, Any]) -> None:
-    for prefix in ("question", "answer"):
-        key = f"{prefix}_code_detected"
-        if key not in results:
-            continue
-        value = results[key]
-        if isinstance(value, dict):
-            code_info = value
-            results[f"{prefix}_code_detected"] = code_info.get("code_detected")
-            results[f"{prefix}_code_language"] = code_info.get("code_language")
-        elif value is not None:
-            results[f"{prefix}_code_detected"] = value
-            results[f"{prefix}_code_language"] = None
-        else:
-            results[f"{prefix}_code_detected"] = None
-            results[f"{prefix}_code_language"] = None
+
+def _column_order(prototypes: Sequence[BaseMetric]) -> List[str]:
+    """The export order of the metric columns, from the metrics themselves.
+
+    Metrics sort by ``sort_key`` (ties broken by name for determinism), and each
+    contributes its ``output_columns`` as a contiguous block.
+    """
+    order: List[str] = []
+    for metric in sorted(prototypes, key=lambda m: (m.sort_key, m.name)):
+        order.extend(metric.output_columns)
+    return order
 
 
-def _expand_content_moderation(results: Dict[str, Any]) -> None:
-    for prefix in ("question", "answer"):
-        key = f"{prefix}_content_moderation"
-        if key not in results:
-            continue
-        value = results[key]
-        if isinstance(value, dict):
-            for subkey, subval in value.items():
-                results[f"{prefix}_{subkey}"] = subval
-        else:
-            for subkey in _MODERATION_SUBKEYS:
-                results[f"{prefix}_{subkey}"] = None
-        del results[key]
-
-
-def _expand_policy_check(results: Dict[str, Any]) -> None:
-    if "policy_check" not in results:
-        return
-    value = results["policy_check"]
-    if value is not None and isinstance(value, dict):
-        results["is_policy_violated"] = value.get("is_policy_violated")
-        results["policy_violation_reason"] = value.get("policy_violation_reason")
-    else:
-        results["is_policy_violated"] = None
-        results["policy_violation_reason"] = None
-    del results["policy_check"]
-
-
-def _reorder(results: Dict[str, Any]) -> Dict[str, Any]:
+def _reorder(results: Dict[str, Any], order: Sequence[str]) -> Dict[str, Any]:
+    """Apply ``order``, then append anything left (aggregates like total_tokens)."""
     ordered: Dict[str, Any] = {}
-    for key in _REORDER_KEYS:
+    for key in order:
         if key in results:
             ordered[key] = results[key]
     for key in results:
@@ -175,101 +119,59 @@ def _reorder(results: Dict[str, Any]) -> Dict[str, Any]:
     return ordered
 
 
-# --------------------------------------------------------------------------- #
-# metric-set assembly (dependency auto-add)
-# --------------------------------------------------------------------------- #
-
-def _build_metric_set(metrics: Sequence[BaseMetric]):
-    """Return (prototypes, dependency_only_names).
-
-    Adds faithfulness / answer_relevancy prototypes when answer_correctness is
-    present but they are not, so the accuracy blend can be computed. Their names
-    are returned so the caller can null them from the output afterwards.
-    """
-    prototypes: List[BaseMetric] = list(metrics)
-    present = {m.name for m in prototypes}
-    dependency_only: List[str] = []
-
-    if "answer_correctness" in present:
-        model = next(
-            (m.model for m in prototypes if m.name == "answer_correctness"), None
-        )
-        from ..metrics.rag import AnswerRelevancyMetric, FaithfulnessMetric
-
-        dep_classes = {
-            "faithfulness": FaithfulnessMetric,
-            "answer_relevancy": AnswerRelevancyMetric,
-        }
-        for dep_name in _ACCURACY_DEPENDENCIES:
-            if dep_name not in present:
-                prototypes.append(dep_classes[dep_name](model=model))
-                dependency_only.append(dep_name)
-
-    return prototypes, dependency_only
-
-
 async def _run_metric(metric: BaseMetric, test_case: LLMTestCase):
-    """Run one metric, mirroring legacy per-metric error isolation."""
+    """Run one metric, isolating its failure from the rest of the row.
+
+    Metrics normally record their own failures (``BaseMetric.record_failure``);
+    this catches anything that escapes that, so one broken metric cannot abort
+    the run.
+    """
     try:
         await metric.a_measure(test_case)
-        return metric
     except Exception as e:  # noqa: BLE001 - isolate per-metric failures
-        print(f"Error calculating {metric.name}: {str(e)}")
+        metric.record_failure(e)
         metric.score = None
-        return metric
+    return metric
 
 
 # --------------------------------------------------------------------------- #
 # per-row + batch orchestration
 # --------------------------------------------------------------------------- #
 
+
 async def _evaluate_row(
     test_case: LLMTestCase,
     prototypes: Sequence[BaseMetric],
-    dependency_only: Sequence[str],
-) -> Dict[str, Any]:
+    order: Sequence[str],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Return ``(ordered results, metric failures)`` for one test case."""
     avail = _availability(test_case)
 
     # Fresh clones per row so concurrent rows never share mutable score state.
     row_metrics = [p.clone() for p in prototypes]
 
-    # Stable base columns for every requested metric (+ reasoning slots).
+    # Stable base columns for every requested metric (+ reasoning slots), so a
+    # metric that is skipped on this row still emits its columns as None.
     results: Dict[str, Any] = {}
     for m in row_metrics:
-        results[m.name] = None
+        results.update(m.expand(None))
         if m.produces_reasoning:
             results[f"{m.name}_reasoning"] = None
 
+    failures: List[str] = []
     runnable = [m for m in row_metrics if _metric_available(m, avail)]
     if runnable:
         completed = await asyncio.gather(*(_run_metric(m, test_case) for m in runnable))
         for m in completed:
-            results[m.name] = m.score
+            results.update(m.expand(m.score))
             if m.produces_reasoning:
                 results[f"{m.name}_reasoning"] = m.reason
+            if m.error is not None:
+                failures.append(f"{m.name}: {m.error}")
 
-    # Column expansion (order matches legacy).
-    _expand_code_detect(results)
-    _expand_content_moderation(results)
-    _expand_policy_check(results)
     calculate_total_tokens(results)
 
-    # overall_accuracy is reported in place of answer_correctness.
-    if "answer_correctness" in results:
-        overall_acc = calculate_overall_accuracy(results)
-        if overall_acc is not None:
-            results["answer_correctness"] = overall_acc
-
-    # Drop dependency-only metrics the caller didn't request.
-    for dep_name in dependency_only:
-        if dep_name in results:
-            results[dep_name] = None
-        for suffix in ("_reasoning", "_key_findings"):
-            key = f"{dep_name}{suffix}"
-            if key in results:
-                results[key] = None
-
-    return _reorder(results)
+    return _reorder(results, order), failures
 
 
 async def _aevaluate(
@@ -277,9 +179,11 @@ async def _aevaluate(
     metrics: Sequence[BaseMetric],
     batch_size: int,
     show_progress: bool,
-) -> List[Dict[str, Any]]:
-    prototypes, dependency_only = _build_metric_set(metrics)
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    prototypes: List[BaseMetric] = list(metrics)
+    order = _column_order(prototypes)
     rows: List[Optional[Dict[str, Any]]] = [None] * len(test_cases)
+    errors: List[Dict[str, Any]] = []
 
     pbar = _make_progress_bar(len(test_cases), show_progress)
     try:
@@ -287,32 +191,70 @@ async def _aevaluate(
             batch = list(enumerate(test_cases))[start : start + batch_size]
 
             async def _row(idx: int, tc: LLMTestCase):
-                return idx, await _evaluate_row(tc, prototypes, dependency_only)
+                return idx, await _evaluate_row(tc, prototypes, order)
 
             tasks = [_row(idx, tc) for idx, tc in batch]
             # as_completed for responsive progress; idx keeps input order intact.
             for future in asyncio.as_completed(tasks):
-                idx, row = await future
+                idx, (row, failures) = await future
                 rows[idx] = row
+                errors += [{"row": idx, "error": f} for f in failures]
                 pbar.update(1)
     finally:
         pbar.close()
 
-    return [r if r is not None else {} for r in rows]
+    errors.sort(key=lambda e: (e["row"], e["error"]))
+    if errors:
+        logger.warning(
+            "%d metric failure(s) across %d row(s); see EvaluationResult.errors",
+            len(errors),
+            len({e["row"] for e in errors}),
+        )
+    return [r if r is not None else {} for r in rows], errors
 
 
 # --------------------------------------------------------------------------- #
-# public entry point
+# public entry points
 # --------------------------------------------------------------------------- #
 
-def evaluate(
+_DEFAULT_BATCH_SIZE = 5
+
+
+def _resolve_batch_size(
+    metrics: Sequence[BaseMetric], batch_size: Optional[int]
+) -> int:
+    """Reconcile the engine's row concurrency with the providers' own ceiling.
+
+    ``batch_size`` and the provider's ``max_workers`` (which also drives the
+    ragas ``RunConfig``) used to be set independently, with nothing keeping them
+    consistent. When ``batch_size`` is not given it is taken from the strictest
+    provider limit in the metric set, so one number governs both.
+    """
+    if batch_size is not None:
+        if batch_size < 1:
+            raise ValueError(f"batch_size must be >= 1, got {batch_size}")
+        return batch_size
+    limits = [
+        int(getattr(m.model, "max_workers"))
+        for m in metrics
+        if m.model is not None and getattr(m.model, "max_workers", None) is not None
+    ]
+    return min(limits) if limits else _DEFAULT_BATCH_SIZE
+
+
+async def a_evaluate(
     dataset: EvaluationDataset,
     metrics: Sequence[BaseMetric],
     *,
-    batch_size: int = 5,
+    batch_size: Optional[int] = None,
     show_progress: bool = True,
 ) -> EvaluationResult:
-    """Evaluate ``dataset``'s test cases against instantiated ``metrics``.
+    """Async form of :func:`evaluate` — await this inside a running event loop.
+
+    The engine is async all the way down, so notebooks, FastAPI handlers, and
+    anything else already running a loop should use this. :func:`evaluate` calls
+    ``asyncio.run``, which raises ``RuntimeError: asyncio.run() cannot be called
+    from a running event loop`` in exactly those places.
 
     Parameters
     ----------
@@ -323,15 +265,50 @@ def evaluate(
         Instantiated metric objects (each built with its model). Metrics whose
         ``required_inputs`` are missing on a given row are skipped for that row.
     batch_size:
-        Number of rows evaluated concurrently per batch.
+        Rows evaluated concurrently per batch. Defaults to the strictest
+        ``max_workers`` among the metrics' providers, else 5.
     show_progress:
         Show a tqdm progress bar.
     """
     if not metrics:
         raise ValueError("evaluate() requires at least one metric.")
 
+    metrics = list(metrics)
     test_cases = list(dataset.test_cases)
-    rows = asyncio.run(
-        _aevaluate(test_cases, list(metrics), batch_size, show_progress)
+    rows, errors = await _aevaluate(
+        test_cases, metrics, _resolve_batch_size(metrics, batch_size), show_progress
     )
-    return EvaluationResult(rows=rows, test_cases=test_cases)
+    return EvaluationResult(rows=rows, test_cases=test_cases, errors=errors)
+
+
+def evaluate(
+    dataset: EvaluationDataset,
+    metrics: Sequence[BaseMetric],
+    *,
+    batch_size: Optional[int] = None,
+    show_progress: bool = True,
+) -> EvaluationResult:
+    """Evaluate ``dataset``'s test cases against instantiated ``metrics``.
+
+    Thin synchronous wrapper around :func:`a_evaluate`. Inside a running event
+    loop (Jupyter, FastAPI) use ``await a_evaluate(...)`` instead — see there for
+    the full parameter documentation.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        pass
+    else:
+        raise RuntimeError(
+            "evaluate() cannot be called from a running event loop "
+            "(Jupyter, FastAPI, ...). Use `await a_evaluate(...)` instead."
+        )
+
+    return asyncio.run(
+        a_evaluate(
+            dataset,
+            metrics,
+            batch_size=batch_size,
+            show_progress=show_progress,
+        )
+    )

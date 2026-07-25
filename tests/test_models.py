@@ -12,18 +12,18 @@ import types
 
 import pytest
 
-from llminspector import (
+from llminspector.config import AzureSettings
+from llminspector.models import (
     AzureOpenAIEmbedding,
     AzureOpenAIModel,
     BaseEmbeddingModel,
     BaseLLM,
-    Settings,
 )
-
 
 # --------------------------------------------------------------------------- #
 # Fakes for the langchain / ragas classes the provider imports lazily.
 # --------------------------------------------------------------------------- #
+
 
 class _FakeMessage:
     def __init__(self, content):
@@ -82,7 +82,7 @@ def patched_langchain(monkeypatch):
 
 @pytest.fixture
 def settings():
-    return Settings(
+    return AzureSettings(
         azure_endpoint="https://example.openai.azure.com/",
         api_version="2024-02-01",
     )
@@ -91,6 +91,7 @@ def settings():
 # --------------------------------------------------------------------------- #
 # Auth selection
 # --------------------------------------------------------------------------- #
+
 
 def test_api_key_auth_builds_client(patched_langchain, settings):
     model = AzureOpenAIModel(settings, api_key="secret")
@@ -119,7 +120,7 @@ def test_no_credentials_raises(patched_langchain, settings):
 
 
 def test_api_key_from_settings(patched_langchain):
-    settings = Settings(
+    settings = AzureSettings(
         azure_endpoint="https://example.openai.azure.com/",
         api_version="2024-02-01",
         api_key="from-settings",
@@ -132,6 +133,7 @@ def test_api_key_from_settings(patched_langchain):
 # Model / deployment names + wrappers
 # --------------------------------------------------------------------------- #
 
+
 def test_default_model_names_promoted(patched_langchain, settings):
     model = AzureOpenAIModel(settings, api_key="k")
     assert model.get_model_name() == "gpt-5-mini"
@@ -140,7 +142,9 @@ def test_default_model_names_promoted(patched_langchain, settings):
 
 def test_model_name_override(patched_langchain, settings):
     model = AzureOpenAIModel(
-        settings, api_key="k", model_name="gpt-4o-mini",
+        settings,
+        api_key="k",
+        model_name="gpt-4o-mini",
         azure_deployment="gpt-4o-mini",
     )
     assert model.get_model_name() == "gpt-4o-mini"
@@ -172,6 +176,7 @@ def test_run_config_matches_legacy(patched_langchain, settings):
 # --------------------------------------------------------------------------- #
 # generate() / embed_text() return types
 # --------------------------------------------------------------------------- #
+
 
 def test_generate_returns_str(patched_langchain, settings):
     model = AzureOpenAIModel(settings, api_key="k")
@@ -216,13 +221,14 @@ def test_embedding_ragas_wrapper(patched_langchain, settings):
 # --------------------------------------------------------------------------- #
 
 _LIVE = all(
-    os.getenv(k) for k in ("azure_endpoint", "api_version", "api_key")
+    os.getenv(f"LLMINSPECTOR_{k.upper()}")
+    for k in ("azure_endpoint", "api_version", "api_key")
 )
 
 
 @pytest.mark.skipif(not _LIVE, reason="no live Azure credentials in env")
 def test_live_generate_and_embed():
-    settings = Settings.from_env()
+    settings = AzureSettings.from_env()
     model = AzureOpenAIModel(settings)
     emb = AzureOpenAIEmbedding(settings)
     assert isinstance(model.generate("Say 'ok'."), str)

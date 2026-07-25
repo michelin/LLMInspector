@@ -1,9 +1,14 @@
-"""Result exporters — the public reporting surface over ``EvaluationResult``.
+"""Reporting — analysis over an ``EvaluationResult``.
 
-Thin, stable functions the public API re-exports. They wrap
-:class:`~llminspector.evaluate.result.EvaluationResult` so downstream code has a
-single import point for turning results into DataFrames / Excel / a numeric
-summary, independent of the result object's internals.
+This module holds what reporting *adds*. Serializing a result is the result
+object's own job:
+
+    result.to_pandas()     -> DataFrame (source + metric columns)
+    result.to_excel(path)  -> .xlsx
+
+``reporting.to_dataframe`` / ``reporting.to_excel`` used to forward to those
+identically-named methods and add nothing, so every export had two doors. Phase
+8.6 removed the forwarders — call the methods on the result.
 """
 
 from __future__ import annotations
@@ -16,16 +21,6 @@ import pandas as pd
 from ..evaluate.result import EvaluationResult
 
 
-def to_dataframe(result: EvaluationResult) -> pd.DataFrame:
-    """Return the evaluation result as a DataFrame (source + metric columns)."""
-    return result.to_pandas()
-
-
-def to_excel(result: EvaluationResult, path: str) -> None:
-    """Write the evaluation result to an ``.xlsx`` file."""
-    result.to_excel(path)
-
-
 def summary(result: EvaluationResult) -> Dict[str, Dict[str, float]]:
     """Aggregate stats (count / mean / min / max) per numeric metric column.
 
@@ -35,7 +30,11 @@ def summary(result: EvaluationResult) -> Dict[str, Dict[str, float]]:
     df = result.to_pandas()
     stats: Dict[str, Dict[str, float]] = {}
     for column in df.columns:
-        numeric = [v for v in df[column] if isinstance(v, Number) and not _is_bool(v)]
+        numeric = [
+            float(v)  # type: ignore[arg-type]
+            for v in df[column]
+            if isinstance(v, Number) and not _is_bool(v)
+        ]
         if not numeric:
             continue
         stats[column] = {
@@ -45,6 +44,22 @@ def summary(result: EvaluationResult) -> Dict[str, Dict[str, float]]:
             "max": max(numeric),
         }
     return stats
+
+
+def errors(result: EvaluationResult) -> pd.DataFrame:
+    """Metric failures as a DataFrame (``row`` / ``metric`` / ``error``).
+
+    Empty when the run was clean. Pair with :func:`summary`: a metric with a
+    suspiciously low ``count`` there usually has rows here.
+    """
+    records = []
+    for entry in result.errors:
+        message = str(entry.get("error", ""))
+        metric, _, detail = message.partition(": ")
+        records.append(
+            {"row": entry.get("row"), "metric": metric, "error": detail or message}
+        )
+    return pd.DataFrame(records, columns=["row", "metric", "error"])
 
 
 def _is_bool(value: Any) -> bool:

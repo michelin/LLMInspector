@@ -32,9 +32,8 @@ class BaseSynthesizer(ABC):
 
     def to_pandas(self) -> pd.DataFrame:
         """Flatten the last-generated goldens (core fields + metadata columns)."""
-        if self.dataset is None:
-            self.generate()
-        return goldens_to_dataframe(self.dataset.goldens)
+        dataset = self.dataset if self.dataset is not None else self.generate()
+        return goldens_to_dataframe(dataset.goldens)
 
     def to_excel(self, path: str) -> None:
         self.to_pandas().to_excel(path, index=False)
