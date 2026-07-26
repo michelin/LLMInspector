@@ -13,6 +13,7 @@ from typing import Any, List, Optional
 import pandas as pd
 
 from ...dataset.golden import Golden
+from ...utils.optional import optional_dependency
 from .base import TestsetBackend
 
 _DEFAULT_REFINE_PROMPT = (
@@ -64,7 +65,10 @@ class RagasTestsetBackend(TestsetBackend):
         self.refine_prompt = refine_prompt
 
     def _load_documents(self) -> list:
-        from langchain_community.document_loaders import DirectoryLoader
+        with optional_dependency(
+            "langchain-community", extra="ragas", feature="document loading"
+        ):
+            from langchain_community.document_loaders import DirectoryLoader
 
         loader = DirectoryLoader(
             self.document_dir,
@@ -103,7 +107,10 @@ class RagasTestsetBackend(TestsetBackend):
         return test_df[column_order]
 
     def _generate_testset_df(self) -> pd.DataFrame:
-        from ragas.testset import TestsetGenerator
+        with optional_dependency(
+            "ragas", extra="ragas", feature="RAG testset generation"
+        ):
+            from ragas.testset import TestsetGenerator
 
         documents = (
             self.documents if self.documents is not None else self._load_documents()

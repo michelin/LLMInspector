@@ -300,3 +300,81 @@ def test_retry_after_is_capped_at_max_delay():
         headers = {"retry-after": "99999"}
 
     assert retry._next_delay(_Huge(), 0, 1.0, 2.0, 60.0) == 60.0
+
+
+# --------------------------------------------------------------------------- #
+# 4. the pass/fail verdict reaches the exported table
+# --------------------------------------------------------------------------- #
+#
+# Every metric computed ``is_successful()`` and then dropped it on the floor:
+# the engine exported only ``expand(score)`` and the reasoning column, so a
+# threshold could be set and its verdict was still invisible in the output.
+
+
+def _thresholded(name, value, threshold):
+    metric = FakeMetric(name, {"actual_output"}, value)
+    metric.threshold = threshold
+    return metric
+
+
+def test_success_column_is_exported_when_a_threshold_is_set():
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(ds, [_thresholded("conciseness", 0.9, 0.5)], show_progress=False)
+    assert result.rows[0]["conciseness_success"] is True
+    assert "conciseness_success" in result.to_pandas().columns
+
+
+def test_success_column_reports_a_failure_below_threshold():
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(ds, [_thresholded("conciseness", 0.2, 0.5)], show_progress=False)
+    assert result.rows[0]["conciseness_success"] is False
+
+
+def test_no_threshold_means_no_success_column_at_all():
+    """Thresholds default to None; 20-plus all-blank columns would be noise."""
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(
+        ds, [FakeMetric("conciseness", {"actual_output"}, 0.9)], show_progress=False
+    )
+    assert "conciseness_success" not in result.rows[0]
+    assert "conciseness_success" not in result.to_pandas().columns
+
+
+def test_success_is_blank_for_a_non_numeric_score_despite_a_threshold():
+    """`>=` is meaningless on a sentiment label, so the verdict stays None."""
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(
+        ds, [_thresholded("answer_sentiment", "Positive", 0.5)], show_progress=False
+    )
+    assert "answer_sentiment_success" in result.rows[0]
+    assert result.rows[0]["answer_sentiment_success"] is None
+
+
+def test_success_column_is_blank_on_a_skipped_row():
+    """Metric unavailable for this row -> placeholder, not a stale verdict."""
+    metric = FakeMetric("faithfulness", {"retrieval_context"}, 0.9)
+    metric.threshold = 0.5
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(ds, [metric], show_progress=False)
+    assert result.rows[0]["faithfulness_success"] is None
+
+
+def test_a_failed_metric_does_not_export_a_stale_verdict():
+    metric = FakeMetric("conciseness", {"actual_output"}, exc=RuntimeError("401"))
+    metric.threshold = 0.5
+    ds = _dataset(LLMTestCase(input="q", actual_output="a"))
+    result = evaluate(ds, [metric], show_progress=False)
+    assert result.rows[0]["conciseness"] is None
+    assert result.rows[0]["conciseness_success"] is None
+    assert result.errors
+
+
+def test_success_column_closes_the_metrics_block():
+    """Order: score, reasoning, sub-columns, then the verdict."""
+    metric = _thresholded("conciseness", 0.9, 0.5)
+    metric.produces_reasoning = True
+    assert metric.output_columns == (
+        "conciseness",
+        "conciseness_reasoning",
+        "conciseness_success",
+    )

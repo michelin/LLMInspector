@@ -52,6 +52,19 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+The five **context metrics** (`ContextPrecision`, `ContextRecall`,
+`ContextUtilisation`, `ContextRelevance`, `ContextEntityRecall`) and the **RAG
+testset synthesizer** are backed by `ragas`, which ships as an optional extra:
+
+```bash
+pip install -e ".[ragas]"
+```
+
+Everything else — all other metrics, the evaluate engine, the alignment and
+adversarial synthesizers — runs on a bare `BaseLLM` provider and needs no extra.
+Reaching for a ragas-backed capability without it raises an `ImportError` naming
+the extra rather than failing obscurely.
+
 > **Note — build backend.** LLMInspector builds with the Michelin-internal
 > `pydnx_packaging` backend, which is not on public PyPI. On a machine **with**
 > Artifactory access the command above works as-is. **Without** it, disable build

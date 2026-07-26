@@ -10,9 +10,10 @@ ContextUtilisation, ContextRelevance, ContextEntityRecall) port the ragas
 from __future__ import annotations
 
 import gc
-from typing import Any, cast
+from typing import Any, Optional, cast
 
 from ..utils.json_utils import parse_json_response
+from ..utils.optional import optional_dependency
 from .base_metric import BaseMetric, RagasBackedMetric
 
 # --------------------------------------------------------------------------- #
@@ -407,8 +408,8 @@ class AnswerCorrectnessMetric(_JsonJudgeMetric):
         "relevancy": "relevancy",
     }
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, model: Any = None, threshold: Optional[float] = None) -> None:
+        super().__init__(model=model, threshold=threshold)
         self.sub_scores: dict = {k: None for k in self._SUB_SCORES}
 
     def _prompt_for(self, test_case: Any) -> str:
@@ -522,7 +523,8 @@ class ContextPrecisionMetric(_RagasContextMetric):
     _error_label = "context_precision_eval"
 
     def _sample(self, test_case: Any):
-        from ragas import SingleTurnSample
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas import SingleTurnSample
 
         return SingleTurnSample(
             user_input=test_case.input,
@@ -531,7 +533,8 @@ class ContextPrecisionMetric(_RagasContextMetric):
         )
 
     def _scorer(self):
-        from ragas.metrics import LLMContextPrecisionWithReference
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas.metrics import LLMContextPrecisionWithReference
 
         return LLMContextPrecisionWithReference(
             name="context_precision", llm=self.evaluator_llm
@@ -545,7 +548,8 @@ class ContextRecallMetric(_RagasContextMetric):
     _error_label = "context_recall_eval"
 
     def _sample(self, test_case: Any):
-        from ragas import SingleTurnSample
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas import SingleTurnSample
 
         return SingleTurnSample(
             user_input=test_case.input,
@@ -555,7 +559,8 @@ class ContextRecallMetric(_RagasContextMetric):
         )
 
     def _scorer(self):
-        from ragas.metrics import LLMContextRecall
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas.metrics import LLMContextRecall
 
         return LLMContextRecall(llm=self.evaluator_llm)
 
@@ -567,7 +572,8 @@ class ContextUtilisationMetric(_RagasContextMetric):
     _error_label = "context_utilisation_eval"
 
     def _sample(self, test_case: Any):
-        from ragas import SingleTurnSample
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas import SingleTurnSample
 
         return SingleTurnSample(
             user_input=test_case.input,
@@ -576,7 +582,8 @@ class ContextUtilisationMetric(_RagasContextMetric):
         )
 
     def _scorer(self):
-        from ragas.metrics import LLMContextPrecisionWithoutReference
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas.metrics import LLMContextPrecisionWithoutReference
 
         return LLMContextPrecisionWithoutReference(llm=self.evaluator_llm)
 
@@ -588,7 +595,8 @@ class ContextRelevanceMetric(_RagasContextMetric):
     _error_label = "context_relevance_eval"
 
     def _sample(self, test_case: Any):
-        from ragas import SingleTurnSample
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas import SingleTurnSample
 
         return SingleTurnSample(
             user_input=test_case.input,
@@ -596,7 +604,8 @@ class ContextRelevanceMetric(_RagasContextMetric):
         )
 
     def _scorer(self):
-        from ragas.metrics import ContextRelevance
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas.metrics import ContextRelevance
 
         return ContextRelevance(name="context_relevance", llm=self.evaluator_llm)
 
@@ -608,7 +617,8 @@ class ContextEntityRecallMetric(_RagasContextMetric):
     _error_label = "context_entity_recall_eval"
 
     def _sample(self, test_case: Any):
-        from ragas import SingleTurnSample
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas import SingleTurnSample
 
         return SingleTurnSample(
             reference=test_case.expected_output,
@@ -616,6 +626,7 @@ class ContextEntityRecallMetric(_RagasContextMetric):
         )
 
     def _scorer(self):
-        from ragas.metrics import ContextEntityRecall
+        with optional_dependency("ragas", extra="ragas", feature="the context metrics"):
+            from ragas.metrics import ContextEntityRecall
 
         return ContextEntityRecall(llm=self.evaluator_llm)

@@ -21,6 +21,7 @@ the metrics: each one declares the columns it owns (``expand`` /
 metric touches only that metric's file.
 
 Two intentional divergences from the legacy code, both noted inline:
+
 1. Batch results are reassembled **in input order** (the legacy
    ``as_completed`` + positional ``pd.concat`` could misalign metrics to the
    wrong row).
@@ -131,6 +132,9 @@ async def _run_metric(metric: BaseMetric, test_case: LLMTestCase):
     except Exception as e:  # noqa: BLE001 - isolate per-metric failures
         metric.record_failure(e)
         metric.score = None
+        # A metric that raised past its own error path may never have reached
+        # is_successful(); a stale verdict must not outlive the score.
+        metric.success = None
     return metric
 
 
@@ -157,6 +161,8 @@ async def _evaluate_row(
         results.update(m.expand(None))
         if m.produces_reasoning:
             results[f"{m.name}_reasoning"] = None
+        if m.success_column is not None:
+            results[m.success_column] = None
 
     failures: List[str] = []
     runnable = [m for m in row_metrics if _metric_available(m, avail)]
@@ -166,6 +172,8 @@ async def _evaluate_row(
             results.update(m.expand(m.score))
             if m.produces_reasoning:
                 results[f"{m.name}_reasoning"] = m.reason
+            if m.success_column is not None:
+                results[m.success_column] = m.success
             if m.error is not None:
                 failures.append(f"{m.name}: {m.error}")
 

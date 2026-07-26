@@ -1,0 +1,3 @@
+Sphinx's html_static_path points here (docs/conf.py). sphinx-copybutton writes
+its assets into this directory at build time, so it must exist in the repo even
+though nothing is checked in.

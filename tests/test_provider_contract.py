@@ -8,11 +8,17 @@ satisfy was "expose a langchain ``BaseChatModel`` plus a ragas wrapper" — not
 These tests pin the fix: a stub implementing **only** ``BaseLLM`` — no langchain,
 no ragas, no ``.client`` — drives every non-context metric end to end.
 
-The test environment installs neither langchain nor ragas, so any code path that
-reached for one would raise ``ImportError`` here rather than pass quietly.
+The guarantee is enforced two ways that hold regardless of what happens to be
+installed: ``test_metric_layer_imports_no_langchain_and_no_ragas`` reads the
+metric modules' ASTs, and ``test_ragas_is_an_optional_extra`` reads the declared
+dependencies. An earlier version asserted that langchain and ragas were simply
+absent from the interpreter, which could never hold once they were installed —
+and one of them is a core dependency by design.
 """
 
+import pathlib
 import sys
+import tomllib
 
 import pytest
 
@@ -67,15 +73,30 @@ def _tc(**kwargs):
 
 
 # --------------------------------------------------------------------------- #
-# the environment itself is part of the assertion
+# the packaging contract itself is part of the assertion
 # --------------------------------------------------------------------------- #
 
 
-def test_neither_langchain_nor_ragas_is_importable_here():
-    """If either becomes installed, the guarantees below weaken silently."""
-    for module in ("langchain_core", "langchain_openai", "ragas"):
-        with pytest.raises(ImportError):
-            __import__(module)
+def _pyproject() -> dict:
+    root = pathlib.Path(__file__).resolve().parent.parent
+    return tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+
+
+def test_ragas_is_an_optional_extra():
+    """ragas must stay opt-in, so it can be swapped out without a core change.
+
+    Only the five ``RagasBackedMetric`` context metrics and the RAG testset
+    engine need it; every other metric runs on a bare ``BaseLLM``. A core
+    dependency would make that true in the code and false in the install.
+    """
+    project = _pyproject()["project"]
+    core = " ".join(project["dependencies"])
+    assert "ragas" not in core, f"ragas leaked into core dependencies: {core}"
+    assert "langchain-community" not in core
+
+    extra = " ".join(project["optional-dependencies"]["ragas"])
+    assert "ragas" in extra
+    assert "langchain-community" in extra
 
 
 # --------------------------------------------------------------------------- #
@@ -319,3 +340,71 @@ def test_every_shipped_prompt_renders():
         for v in variables:
             assert f"<{v}>" in rendered, f"{name} dropped {v}"
         assert "{{" not in rendered and "}}" not in rendered, f"{name} left escapes"
+
+
+# --------------------------------------------------------------------------- #
+# ragas is absent-tolerant: the package works without the extra
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def no_ragas(monkeypatch):
+    """Make every `import ragas...` raise, as it would without the extra."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def guarded(name, *args, **kwargs):
+        if name == "ragas" or name.startswith("ragas."):
+            raise ImportError(f"No module named {name!r}")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded)
+    for module in [m for m in sys.modules if m == "ragas" or m.startswith("ragas.")]:
+        monkeypatch.delitem(sys.modules, module, raising=False)
+
+
+def test_azure_provider_constructs_without_ragas(no_ragas, monkeypatch):
+    """The ragas wrapper is built on first use, not in __init__.
+
+    It used to be eager, so `pip install llminspector` without the extra could
+    not even construct the one provider the package ships.
+    """
+    import types
+
+    from llminspector.config import AzureSettings
+    from llminspector.models import AzureOpenAIModel
+
+    fake = types.ModuleType("langchain_openai")
+    fake.AzureChatOpenAI = lambda **kw: types.SimpleNamespace(**kw)
+    monkeypatch.setitem(sys.modules, "langchain_openai", fake)
+
+    settings = AzureSettings(
+        azure_endpoint="https://example.openai.azure.com/", api_version="2024-02-01"
+    )
+    model = AzureOpenAIModel(settings, api_key="k")
+    assert isinstance(model, BaseLLM)
+    assert model.client is not None
+
+    # Only reaching for the ragas wrapper surfaces the missing extra.
+    with pytest.raises(ImportError, match=r"llminspector\[ragas\]"):
+        model.ragas_llm()
+
+
+def test_a_missing_ragas_names_the_extra_to_install(no_ragas):
+    """Not a bare ModuleNotFoundError from inside a metric."""
+    metric = ContextPrecisionMetric(StubLLM())
+    with pytest.raises(ImportError, match=r"pip install 'llminspector\[ragas\]'"):
+        metric._sample(_tc(expected_output="gt", retrieval_context=["ctx"]))
+
+
+def test_a_context_metric_without_ragas_fails_the_row_not_the_run(no_ragas):
+    """The directed message lands on EvaluationResult.errors, score stays None."""
+    metric = ContextPrecisionMetric(StubLLM())
+    tc = _tc(expected_output="gt", retrieval_context=["ctx"])
+    assert metric.measure(tc) is None
+    assert "llminspector[ragas]" in metric.error
+
+
+def test_non_ragas_metrics_are_unaffected_by_a_missing_ragas(no_ragas):
+    assert ConcisenessMetric(StubLLM('{"conciseness": 1.0}')).measure(_tc()) == 1.0

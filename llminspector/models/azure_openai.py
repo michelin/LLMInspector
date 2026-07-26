@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any, Callable, List, Optional
 
 from ..config.settings import AzureSettings
+from ..utils.optional import optional_dependency
 from .base_model import BaseEmbeddingModel, BaseLLM
 from .retry import (
     DEFAULT_MAX_RETRIES,
@@ -48,7 +49,8 @@ def _resolve_auth(
 def _run_config(
     max_workers: int = _DEFAULT_MAX_WORKERS, timeout: int = _DEFAULT_TIMEOUT
 ):
-    from ragas.run_config import RunConfig
+    with optional_dependency("ragas", extra="ragas", feature="RunConfig"):
+        from ragas.run_config import RunConfig
 
     return RunConfig(max_workers=max_workers, timeout=timeout)
 
@@ -96,7 +98,10 @@ class AzureOpenAIModel(BaseLLM):
         self._timeout = timeout
 
         self._client = self._build_client()
-        self._ragas_llm = self._build_ragas_llm()
+        # Built on first use, not here: ragas is an optional extra, and a
+        # provider that eagerly wrapped itself would make `pip install
+        # llminspector` unable to construct a model at all.
+        self._ragas_llm: Any = None
 
     def _build_client(self):
         from langchain_openai import AzureChatOpenAI
@@ -116,7 +121,10 @@ class AzureOpenAIModel(BaseLLM):
         return AzureChatOpenAI(**kwargs)
 
     def _build_ragas_llm(self):
-        from ragas.llms import LangchainLLMWrapper
+        with optional_dependency(
+            "ragas", extra="ragas", feature="the ragas LLM wrapper"
+        ):
+            from ragas.llms import LangchainLLMWrapper
 
         return LangchainLLMWrapper(
             self._client, bypass_temperature=self._bypass_temperature
@@ -140,6 +148,14 @@ class AzureOpenAIModel(BaseLLM):
         return getattr(response, "content", response)
 
     def ragas_llm(self) -> Any:
+        """The ragas wrapper around this client, built on first use.
+
+        Raises ``ImportError`` naming the ``llminspector[ragas]`` extra when
+        ragas is absent — only the five ``RagasBackedMetric`` context metrics
+        and the RAG testset engine ever reach here.
+        """
+        if self._ragas_llm is None:
+            self._ragas_llm = self._build_ragas_llm()
         return self._ragas_llm
 
     @property
@@ -188,7 +204,8 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
         self._azure_ad_token_provider = azure_ad_token_provider
 
         self._client = self._build_client()
-        self._ragas_embeddings = self._build_ragas_embeddings()
+        # Lazy for the same reason as AzureOpenAIModel._ragas_llm.
+        self._ragas_embeddings: Any = None
 
     def _build_client(self):
         from langchain_openai import AzureOpenAIEmbeddings
@@ -206,7 +223,10 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
         return AzureOpenAIEmbeddings(**kwargs)
 
     def _build_ragas_embeddings(self):
-        from ragas.embeddings import LangchainEmbeddingsWrapper
+        with optional_dependency(
+            "ragas", extra="ragas", feature="the ragas embeddings wrapper"
+        ):
+            from ragas.embeddings import LangchainEmbeddingsWrapper
 
         return LangchainEmbeddingsWrapper(self._client)
 
@@ -222,6 +242,9 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
         return self._client.embed_documents(texts)
 
     def ragas_embeddings(self) -> Any:
+        """The ragas wrapper around this client, built on first use."""
+        if self._ragas_embeddings is None:
+            self._ragas_embeddings = self._build_ragas_embeddings()
         return self._ragas_embeddings
 
     @property

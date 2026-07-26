@@ -18,6 +18,28 @@ metric.is_successful()   # score >= threshold, or None for non-numeric / no thre
 `required_inputs` — the `LLMTestCase` attributes it needs — so `evaluate()` can skip it on rows
 that lack them.
 
+## Thresholds and the `_success` column
+
+`threshold` defaults to `None` on every metric, so pass/fail is off until you ask for it. Set one
+and `evaluate()` exports a `{metric_name}_success` column alongside the score:
+
+```python
+evaluate(dataset, [FaithfulnessMetric(model, threshold=0.7)])
+# -> columns: faithfulness, faithfulness_reasoning, faithfulness_success
+```
+
+Metrics **without** a threshold contribute no `_success` column at all — otherwise a default run
+would carry twenty-odd all-blank columns. The value is blank even with a threshold when the score
+is not numeric (sentiment labels, moderation flag dicts), and on rows where the metric was skipped
+or failed.
+
+## ragas-backed metrics
+
+The five `Context*` metrics subclass `RagasBackedMetric` and need both the `llminspector[ragas]`
+extra and a provider exposing `ragas_llm()`. They are the only metrics that do; every other one
+runs on a bare `BaseLLM`. Without the extra they score `None` and record an `ImportError` naming
+it on `EvaluationResult.errors`, rather than aborting the run.
+
 ## Catalogue
 
 | Metric | Needs | Output |

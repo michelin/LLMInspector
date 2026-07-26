@@ -78,8 +78,8 @@ class BaseMetric(ABC):
         """Log a metric failure and remember it for the result object.
 
         Metrics isolate their own exceptions and score ``None``. Without this,
-        a run where every call returned 401 produced a clean table of ``None``s
-        indistinguishable from *skipped for missing input*.
+        a run where every call returned 401 produced a clean table of ``None``
+        values indistinguishable from *skipped for missing input*.
         """
         self.error = f"{type(exc).__name__}: {exc}"
         logger.warning("Metric %r failed: %s", self.name, exc, exc_info=exc)
@@ -170,15 +170,33 @@ class BaseMetric(ABC):
         return {self.name: score}
 
     @property
+    def success_column(self) -> Optional[str]:
+        """Name of this metric's pass/fail column, or ``None`` when it has none.
+
+        The column exists **only when a threshold is set**. With thresholds
+        defaulting to ``None``, always emitting it would add one all-blank
+        column per metric to every export — 20-plus columns of nothing on a
+        default run. Give a metric a threshold and its verdict appears.
+
+        The value can still be blank *with* a threshold: :meth:`is_successful`
+        returns ``None`` for a non-numeric score (sentiment labels, moderation
+        flag dicts), since ``>=`` means nothing there.
+        """
+        return f"{self.name}_success" if self.threshold is not None else None
+
+    @property
     def output_columns(self) -> Tuple[str, ...]:
         """Every column this metric contributes, in export order.
 
         Derived from :meth:`expand` so the two can never drift, with the
-        reasoning column slotted directly behind the headline score.
+        reasoning column slotted directly behind the headline score and the
+        pass/fail verdict (when there is a threshold) closing the block.
         """
         columns = list(self.expand(None))
         if self.produces_reasoning:
             columns.insert(1, f"{self.name}_reasoning")
+        if self.success_column is not None:
+            columns.append(self.success_column)
         return tuple(columns)
 
     def clone(self) -> "BaseMetric":
