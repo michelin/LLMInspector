@@ -22,9 +22,9 @@ tc = LLMTestCase(
 )
 ```
 
-Field names are DeepEval-shaped and map onto the legacy five inputs:
+Field names map onto the five spreadsheet columns:
 
-| LLMTestCase | Legacy |
+| LLMTestCase | Column |
 |-------------|--------|
 | `input` | question |
 | `actual_output` | answer |

@@ -1,7 +1,7 @@
 """The ``LLMTestCase`` — a single evaluable unit.
 
-Maps the five legacy per-row inputs (``question / answer / ground_truth /
-contexts / policy``) onto DeepEval-shaped attribute names:
+Maps the five per-row spreadsheet columns (``question / answer / ground_truth /
+contexts / policy``) onto explicit attribute names:
 
     question     -> input
     answer       -> actual_output

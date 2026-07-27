@@ -1,1 +1,5 @@
-deepeval_scratch
+.env
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
