@@ -48,7 +48,6 @@ htmlcov/
 .coverage.*
 .cache
 nosetests.xml
-deepeval_scratch/
 coverage.xml
 *.cover
 .hypothesis/
@@ -84,3 +83,6 @@ llm_inspector/version.py
 *.amltmp
 # Sphinx local build output
 docs/_build/
+
+# Claude Code local overrides (shared config lives in .claude/settings.json)
+.claude/settings.local.json
