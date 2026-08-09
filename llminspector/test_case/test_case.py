@@ -10,9 +10,9 @@ contexts / policy``) onto explicit attribute names:
     policy       -> policy
 """
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class LLMTestCase(BaseModel):
@@ -31,6 +31,18 @@ class LLMTestCase(BaseModel):
     expected_output: Optional[str] = None
     retrieval_context: Optional[List[str]] = None
     policy: Optional[str] = None
+
+    #: The ``Golden.id`` this case was promoted from, when it came from one.
+    #: This is the only link back from a scored row to the golden — and to the
+    #: generation lineage on its metadata — that produced it. ``None`` for cases
+    #: read straight from a spreadsheet.
+    golden_id: Optional[str] = None
+
+    #: Carried over from the originating golden. Deliberately **not** exported
+    #: by ``EvaluationDataset.to_pandas`` or ``EvaluationResult.to_pandas``,
+    #: both of which name their columns explicitly: lineage is for tracing a row
+    #: back, not for widening every result table.
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("input")
     @classmethod

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import pandas as pd
 
@@ -34,11 +34,18 @@ class ColumnMapping:
 
 @dataclass
 class GoldenColumnMapping:
-    """Maps :class:`Golden` attributes to spreadsheet column names."""
+    """Maps :class:`Golden` attributes to spreadsheet column names.
+
+    ``id_col`` is the one addition to the legacy set. It is read back when
+    present and written on export, so a golden keeps its identity across the
+    round trip instead of being handed a fresh uuid on every reload — which
+    would sever the ``golden_id`` link on any test case promoted from it.
+    """
 
     input_col: str = "question"
     expected_output_col: str = "ground_truth"
     context_col: str = "contexts"
+    id_col: str = "id"
 
 
 def _cell(value: Any) -> Optional[str]:
@@ -54,6 +61,18 @@ def _cell(value: Any) -> Optional[str]:
         pass
     text = str(value).strip()
     return text or None
+
+
+def _is_missing(value: Any) -> bool:
+    """True for ``None`` and for pandas' NaN/NaT, without stringifying."""
+    if value is None:
+        return True
+    try:
+        return bool(pd.isna(value))
+    except (TypeError, ValueError):
+        # Lists, dicts and other containers make ``pd.isna`` return an array or
+        # raise; a container is by definition present.
+        return False
 
 
 def _parse_context(value: Any) -> Optional[List[str]]:
@@ -191,20 +210,46 @@ class EvaluationDataset:
         mapping: Optional[GoldenColumnMapping] = None,
         **col_overrides: str,
     ) -> "EvaluationDataset":
-        """Build a dataset of :class:`Golden` from a DataFrame."""
+        """Build a dataset of :class:`Golden` from a DataFrame.
+
+        Every column that is not one of the four mapped core fields is collected
+        into :attr:`Golden.metadata`. ``Golden`` sets ``extra="ignore"``, so
+        without this the generation lineage, quality scores and source-file
+        columns written by :meth:`goldens_to_pandas` vanished silently on
+        reload — the export said one thing and the reload said another.
+        """
         mapping = _resolve_mapping(GoldenColumnMapping, mapping, col_overrides)
+        core = {
+            mapping.input_col,
+            mapping.expected_output_col,
+            mapping.context_col,
+            mapping.id_col,
+        }
+        extra_cols = [c for c in df.columns if c not in core]
+
         goldens: List[Golden] = []
         for _, row in df.iterrows():
             input_value = _cell(row.get(mapping.input_col))
             if input_value is None:
                 continue
-            goldens.append(
-                Golden(
-                    input=input_value,
-                    expected_output=_cell(row.get(mapping.expected_output_col)),
-                    context=_parse_context(row.get(mapping.context_col)),
-                )
-            )
+            # Missing cells are dropped rather than stored as None: exporting a
+            # heterogeneous batch unions every golden's metadata keys and fills
+            # the gaps with NaN, so keeping them would give every golden every
+            # other golden's keys after one round trip.
+            metadata = {
+                col: row[col] for col in extra_cols if not _is_missing(row.get(col))
+            }
+            fields: dict = {
+                "input": input_value,
+                "expected_output": _cell(row.get(mapping.expected_output_col)),
+                "context": _parse_context(row.get(mapping.context_col)),
+                "metadata": metadata,
+            }
+            # Absent id column -> let the default factory mint one.
+            golden_id = _cell(row.get(mapping.id_col))
+            if golden_id is not None:
+                fields["id"] = golden_id
+            goldens.append(Golden(**fields))
         return cls(goldens=goldens)
 
     @classmethod
@@ -224,23 +269,16 @@ class EvaluationDataset:
         mapping: Optional[GoldenColumnMapping] = None,
         **col_overrides: str,
     ) -> pd.DataFrame:
-        """Serialize ``goldens`` back to a DataFrame using the mapping."""
+        """Serialize ``goldens`` back to a DataFrame using the mapping.
+
+        Delegates to :func:`goldens_to_dataframe`, so the id and metadata
+        columns appear here too. This used to hardcode the three core columns
+        and drop ``metadata`` entirely, which made the export lossy in exactly
+        the direction that matters — everything a generator adds lives in
+        metadata.
+        """
         mapping = _resolve_mapping(GoldenColumnMapping, mapping, col_overrides)
-        rows = []
-        for g in self.goldens:
-            rows.append(
-                {
-                    mapping.input_col: g.input,
-                    mapping.expected_output_col: g.expected_output,
-                    mapping.context_col: g.context,
-                }
-            )
-        columns = [
-            mapping.input_col,
-            mapping.expected_output_col,
-            mapping.context_col,
-        ]
-        return pd.DataFrame(rows, columns=columns)
+        return goldens_to_dataframe(self.goldens, mapping=mapping)
 
     def goldens_to_excel(
         self,
@@ -252,6 +290,111 @@ class EvaluationDataset:
         self.goldens_to_pandas(mapping=mapping, **col_overrides).to_excel(
             path, index=False
         )
+
+    # -- promotion ------------------------------------------------------------
+
+    def to_test_cases(
+        self,
+        answers: Optional[Sequence[Optional[str]]] = None,
+        policies: Optional[Sequence[Optional[str]]] = None,
+    ) -> List[LLMTestCase]:
+        """Promote ``goldens`` to :class:`LLMTestCase` objects.
+
+        The documented workflow is export goldens → run them through the system
+        under test → re-import with answers. This is the in-memory equivalent,
+        so a generate-then-evaluate script never has to touch a spreadsheet.
+
+        Each case carries its golden's ``id`` on ``golden_id`` and a copy of its
+        ``metadata``, so results stay traceable to the golden that produced them.
+
+        Parameters
+        ----------
+        answers:
+            System answers, positionally aligned with ``goldens``. Omitted
+            entirely, every case gets ``actual_output=None``.
+        policies:
+            Policy text per golden, same alignment. Goldens carry no policy of
+            their own — it belongs to the evaluation, not the seed.
+
+        Raises
+        ------
+        ValueError
+            When a supplied sequence's length does not match ``goldens``.
+            Silently zipping to the shorter of the two would attach answers to
+            the wrong questions, which no downstream check would catch.
+        """
+        for name, values in (("answers", answers), ("policies", policies)):
+            if values is not None and len(values) != len(self.goldens):
+                raise ValueError(
+                    f"{name} has {len(values)} item(s) but there are "
+                    f"{len(self.goldens)} golden(s); they must align positionally."
+                )
+        return [
+            golden.to_test_case(
+                actual_output=answers[i] if answers is not None else None,
+                policy=policies[i] if policies is not None else None,
+            )
+            for i, golden in enumerate(self.goldens)
+        ]
+
+
+def goldens_to_dataframe(
+    goldens: Sequence[Golden],
+    mapping: Optional[GoldenColumnMapping] = None,
+) -> pd.DataFrame:
+    """Flatten goldens to a DataFrame: id, core fields, then metadata columns.
+
+    Metadata columns are the union of every golden's keys, in first-seen order,
+    so the column set is stable and a golden missing a key gets a blank cell
+    rather than shifting the table.
+
+    ``mapping`` selects the column *names*:
+
+    * ``None`` (the default) uses the :class:`Golden` attribute names —
+      ``id`` / ``input`` / ``expected_output`` / ``context``. This is what a
+      generator's own export wants: a fresh artefact, named after the model.
+    * a :class:`GoldenColumnMapping` uses the spreadsheet names, which is what
+      :meth:`EvaluationDataset.goldens_to_pandas` passes so its output stays
+      readable by :meth:`EvaluationDataset.goldens_from_pandas`. Those defaults
+      are a frozen compatibility surface — see ``dataset/CLAUDE.md``.
+    """
+    if mapping is None:
+        id_col, input_col, expected_col, context_col = (
+            "id",
+            "input",
+            "expected_output",
+            "context",
+        )
+    else:
+        id_col = mapping.id_col
+        input_col = mapping.input_col
+        expected_col = mapping.expected_output_col
+        context_col = mapping.context_col
+
+    core = (id_col, input_col, expected_col, context_col)
+    metadata_keys: List[str] = []
+    seen = set(core)
+    for golden in goldens:
+        for key in golden.metadata:
+            # A metadata key colliding with a core column would overwrite it in
+            # the record dict; the core field wins and the collision is skipped.
+            if key not in seen:
+                seen.add(key)
+                metadata_keys.append(key)
+
+    records = []
+    for golden in goldens:
+        record: Dict[str, Any] = {
+            id_col: golden.id,
+            input_col: golden.input,
+            expected_col: golden.expected_output,
+            context_col: golden.context,
+        }
+        for key in metadata_keys:
+            record[key] = golden.metadata.get(key)
+        records.append(record)
+
+    return pd.DataFrame(records, columns=list(core) + metadata_keys)
 
 
 def _test_case_columns(mapping: ColumnMapping) -> List[str]:

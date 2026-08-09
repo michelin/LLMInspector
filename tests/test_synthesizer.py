@@ -13,12 +13,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from llminspector.dataset import EvaluationDataset, Golden
+from llminspector.dataset import EvaluationDataset, Golden, goldens_to_dataframe
 from llminspector.synthesizer import (
     AdversarialSynthesizer,
     AlignmentSynthesizer,
     RagSynthesizer,
-    goldens_to_dataframe,
 )
 from llminspector.synthesizer import perturbations as p
 from llminspector.synthesizer.engines import CuratedBankSource
@@ -178,6 +177,7 @@ def test_alignment_synthesizer_accepts_injected_engine():
     assert dataset.goldens[0].input == "p1"
     df = synth.to_pandas()
     assert list(df.columns) == [
+        "id",
         "input",
         "expected_output",
         "context",
@@ -191,7 +191,7 @@ def test_goldens_to_dataframe_unions_metadata():
         Golden(input="b", metadata={"y": 2}),
     ]
     df = goldens_to_dataframe(goldens)
-    assert list(df.columns) == ["input", "expected_output", "context", "x", "y"]
+    assert list(df.columns) == ["id", "input", "expected_output", "context", "x", "y"]
     assert df["x"].iloc[0] == 1 and pd.isna(df["x"].iloc[1])
 
 
@@ -258,7 +258,7 @@ def test_declared_keys_match_what_the_source_actually_emits():
 
 def test_output_columns_are_knowable_before_generating():
     synth = AdversarialSynthesizer.from_excel(SAMPLE_ADVERSARIAL, capability="all")
-    expected = ["input", "expected_output", "context", *synth.metadata_keys]
+    expected = ["id", "input", "expected_output", "context", *synth.metadata_keys]
     assert list(synth.to_pandas().columns) == expected
 
 

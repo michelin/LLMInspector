@@ -6,7 +6,10 @@ returning an :class:`~llminspector.dataset.dataset.EvaluationDataset` of
 swapping the internal engine never requires a caller-side refactor.
 
 Goldens carry synthesizer-specific columns in ``metadata``; :meth:`to_pandas`
-flattens core fields + metadata back into a DataFrame.
+flattens core fields + metadata back into a DataFrame via
+:func:`~llminspector.dataset.dataset.goldens_to_dataframe`, which lives in
+``dataset/`` because flattening goldens is a dataset concern — the synthesizer
+layer only happens to have been its first caller.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from ..dataset.dataset import EvaluationDataset
+from ..dataset.dataset import EvaluationDataset, goldens_to_dataframe
 from ..dataset.golden import Golden
 
 
@@ -41,28 +44,3 @@ class BaseSynthesizer(ABC):
     def _store(self, goldens: List[Golden]) -> EvaluationDataset:
         self.dataset = EvaluationDataset(goldens=goldens)
         return self.dataset
-
-
-def goldens_to_dataframe(goldens: List[Golden]) -> pd.DataFrame:
-    """DataFrame with input/expected_output/context then metadata columns."""
-    metadata_keys: List[str] = []
-    seen = set()
-    for g in goldens:
-        for key in g.metadata:
-            if key not in seen:
-                seen.add(key)
-                metadata_keys.append(key)
-
-    records = []
-    for g in goldens:
-        record = {
-            "input": g.input,
-            "expected_output": g.expected_output,
-            "context": g.context,
-        }
-        for key in metadata_keys:
-            record[key] = g.metadata.get(key)
-        records.append(record)
-
-    columns = ["input", "expected_output", "context"] + metadata_keys
-    return pd.DataFrame(records, columns=columns)

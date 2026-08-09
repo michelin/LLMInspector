@@ -37,6 +37,11 @@ OWNERS = {
         "Golden",
         "ColumnMapping",
         "GoldenColumnMapping",
+        # Moved here from ``synthesizer``: flattening goldens to a table is a
+        # dataset concern, and ``goldens_to_pandas`` is now its main caller.
+        # The synthesizer layer imports it rather than re-exporting it, so the
+        # name keeps exactly one import path.
+        "goldens_to_dataframe",
     ],
     "llminspector.config": ["AzureSettings", "Settings"],
     "llminspector.models": [
@@ -91,7 +96,6 @@ OWNERS = {
         "LegacyTagT5Engine",
         "RagasTestsetBackend",
         "CuratedBankSource",
-        "goldens_to_dataframe",
     ],
     "llminspector.reporting": ["summary", "errors"],
 }

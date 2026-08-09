@@ -8,7 +8,7 @@ implementations replace.
 
 from .adversarial import AdversarialSynthesizer
 from .alignment import AlignmentSynthesizer
-from .base import BaseSynthesizer, goldens_to_dataframe
+from .base import BaseSynthesizer
 from .engines import (
     AlignmentEngine,
     AttackSource,
@@ -21,7 +21,6 @@ from .rag import RagSynthesizer
 
 __all__ = [
     "BaseSynthesizer",
-    "goldens_to_dataframe",
     "AlignmentSynthesizer",
     "AdversarialSynthesizer",
     "RagSynthesizer",

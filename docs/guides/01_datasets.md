@@ -35,6 +35,12 @@ Field names map onto the five spreadsheet columns:
 `retrieval_context` accepts a single string or an iterable of strings; blanks are dropped. Only
 `input` is required — every metric that needs more filters itself out when its inputs are missing.
 
+Two further fields exist for tracing a row back to where it came from:
+`golden_id` (the `Golden.id` it was promoted from, else `None`) and `metadata`
+(copied from that golden). Neither is exported — `to_pandas` and
+`EvaluationResult.to_pandas` name their columns explicitly, so result tables stay
+the width they have always been.
+
 ## EvaluationDataset
 
 ```python
@@ -56,7 +62,7 @@ df = dataset.to_pandas()
 dataset.to_excel("out.xlsx")
 ```
 
-For synthesis seeds, use the golden variants: `goldens_from_excel` / `goldens_from_pandas` /
+For generation seeds, use the golden variants: `goldens_from_excel` / `goldens_from_pandas` /
 `goldens_to_pandas` / `goldens_to_excel`.
 
 ## Golden
@@ -65,8 +71,40 @@ For synthesis seeds, use the golden variants: `goldens_from_excel` / `goldens_fr
 from llminspector.dataset import Golden
 
 g = Golden(input="...", expected_output="...", context=["..."], metadata={"capability": "toxicity"})
+g.id           # '3f9a…' — minted automatically, stable across a model_copy
 ```
 
-`metadata` is where synthesizers stash their extra columns (`augmentation_type`, `Capability`,
-`synthesizer_name`, …) so every synthesizer emits a uniform shape — see
+`metadata` is where generators stash their extra columns (`augmentation_type`, `Capability`,
+`synthesizer_name`, lineage, quality scores, …) so every generator emits a uniform shape — see
 [Synthesizers](05_synthesizers.md).
+
+### Metadata survives the round trip
+
+`goldens_to_pandas` / `goldens_to_excel` write `id` and one column per metadata
+key (the union across all goldens, in first-seen order). `goldens_from_pandas` /
+`goldens_from_excel` read them back: any column that is not one of the four
+mapped core fields (`id` / `question` / `ground_truth` / `contexts`) is collected
+into `metadata`. Blank cells are dropped rather than stored as `None`, so a
+golden never inherits another golden's keys.
+
+Ids round-trip too. Without that, every reload would mint fresh ids and sever the
+`golden_id` link on anything promoted from those goldens.
+
+### Promoting goldens to test cases
+
+A golden becomes evaluable once there is an answer to score:
+
+```python
+tc = g.to_test_case(actual_output="Paris is the capital.")
+tc.golden_id == g.id        # True — results stay traceable to their seed
+
+# Or for a whole dataset, positionally aligned with `dataset.goldens`:
+cases = dataset.to_test_cases(answers=[...], policies=[...])
+scored = EvaluationDataset(test_cases=cases)
+```
+
+`context` becomes `retrieval_context` — the same passages, named for what they
+are on each side of the pipeline. `policy` is supplied at promotion time because
+it belongs to the evaluation, not to the seed. A mismatched `answers` length
+raises rather than zipping to the shorter sequence, which would silently attach
+answers to the wrong questions.

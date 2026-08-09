@@ -1,6 +1,11 @@
 """Dataset layer — ``Golden`` and ``EvaluationDataset`` (Phase 1)."""
 
-from .dataset import ColumnMapping, EvaluationDataset, GoldenColumnMapping
+from .dataset import (
+    ColumnMapping,
+    EvaluationDataset,
+    GoldenColumnMapping,
+    goldens_to_dataframe,
+)
 from .golden import Golden
 
 __all__ = [
@@ -8,4 +13,5 @@ __all__ = [
     "Golden",
     "ColumnMapping",
     "GoldenColumnMapping",
+    "goldens_to_dataframe",
 ]
