@@ -23,9 +23,17 @@ from .config import (
 from .generator import GenerationResult, Generator
 from .rag import RagGenerator
 from .source import GoldenSource, SyncGoldenSource
-from .sources import CuratedBankSource
+from .sources import ContextSource, CuratedBankSource
 from .sources.ragas_testset import RagasTestsetBackend
 from .stage import Stage, StageContext
+from .stages import (
+    EvolutionStage,
+    ExpectedOutputStage,
+    FiltrationStage,
+    PerturbationStage,
+    StylingStage,
+    default_stages,
+)
 
 __all__ = [
     # the pipeline
@@ -35,6 +43,13 @@ __all__ = [
     "SyncGoldenSource",
     "Stage",
     "StageContext",
+    # the stage chain
+    "default_stages",
+    "FiltrationStage",
+    "EvolutionStage",
+    "StylingStage",
+    "ExpectedOutputStage",
+    "PerturbationStage",
     # configuration
     "GenerationConfig",
     "FiltrationConfig",
@@ -43,6 +58,7 @@ __all__ = [
     # presets and the sources behind them
     "AdversarialGenerator",
     "RagGenerator",
+    "ContextSource",
     "CuratedBankSource",
     "RagasTestsetBackend",
 ]

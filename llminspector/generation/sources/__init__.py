@@ -5,6 +5,7 @@ One module per way of seeding a run. Each implements
 follows is identical no matter where the goldens came from.
 """
 
+from .contexts import ContextSource
 from .curated_bank import CuratedBankSource
 
-__all__ = ["CuratedBankSource"]
+__all__ = ["ContextSource", "CuratedBankSource"]

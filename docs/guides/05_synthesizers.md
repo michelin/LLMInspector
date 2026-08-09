@@ -47,6 +47,93 @@ in memory instead.
 Under the hood this is a `Generator` over `CuratedBankSource` with an empty stage list — the
 classmethods exist so the common case is one line.
 
+## Grounded generation from contexts
+
+The full pipeline: hand it context chunks and it writes grounded inputs, filters
+them, evolves them, re-checks them, and answers them.
+
+```python
+from llminspector.generation import (
+    ContextSource, Generator, GenerationConfig, default_stages,
+)
+
+source = ContextSource(
+    [
+        ["The API allows 500 requests per minute.", "Bursts up to 750 are tolerated."],
+        ["Invoices are issued on the first of the month."],
+    ],
+    max_goldens_per_context=2,
+)
+
+result = await Generator(
+    source, default_stages(), config=GenerationConfig(model=model, seed=42),
+).a_generate()
+```
+
+No optional dependency is involved — this runs on a core install.
+
+### The chain, and why it is in this order
+
+`default_stages()` returns **filter → evolve → filter → style → expected_output**.
+Generation itself is not a stage: it turns one context into *many* inputs, and a
+stage is one golden in, one golden out, so producing the initial goldens is the
+source's job.
+
+Two orderings are deliberate:
+
+- **Evolution runs before a final filter pass, not after.** Evolving last and
+  never re-checking lets a compounding chain of rewrites leave an input
+  unanswerable from its context with nothing able to notice. The second pass is
+  the cheap one — `max_rewrites=0`, so it scores once and applies the reject
+  policy rather than re-running the repair loop.
+- **Expected output runs last.** Everything before it can still change the input,
+  and a reference answer written against a pre-evolution question is worse than
+  none: it looks like ground truth and scores the wrong thing.
+
+A clean golden costs five model calls: write, score, evolve, re-score, answer.
+Styling adds one *only when configured* — an unconfigured `StylingStage` makes
+zero calls.
+
+### Filtration is a policy
+
+```python
+FiltrationConfig(quality_threshold=0.5, max_rewrites=3, on_reject="rewrite")
+```
+
+The input is scored on self-containment and clear objective, rewritten with the
+critic's feedback while it fails, and **re-scored after every rewrite** — so the
+`quality` column always describes the text actually stored, not a string that no
+longer exists. When it still fails after `max_rewrites`:
+
+| `on_reject` | Outcome |
+|---|---|
+| `"rewrite"` (default) | Kept, flagged `below_threshold` |
+| `"discard"` | Dropped; the reason lands on `result.rejected` |
+| `"keep"` | Kept, unflagged |
+
+### Lineage
+
+Every stage appends a compact record to `golden.metadata["lineage"]` and
+promotes the columns an export needs — `quality`, `rewrites`, `evolutions`,
+`below_threshold`, `styled`. Each stage declares them in `metadata_keys`, so the
+output column set is knowable without paying for a run.
+
+### Perturbation
+
+`PerturbationStage` is opt-in and makes **no model call** — it roughens an input
+with typos, OCR noise, or case changes for adversarial robustness testing. Put it
+*after* everything else: filtration would score its own noise as a defect.
+
+```python
+from llminspector.generation import PerturbationStage
+
+stages = [*default_stages(), PerturbationStage(["typo", "ocr_typo"])]
+```
+
+Seeded runs are reproducible: `GenerationConfig.seed` drives both the evolution
+strategy draws and the perturbations. The seed is mixed with each golden's input
+text, so a run replays exactly while goldens within it still vary.
+
 ## RAG
 
 Question / ground-truth / context triples generated from your documents, backed by `ragas`:

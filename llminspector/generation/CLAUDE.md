@@ -61,6 +61,47 @@ branch truncated a result list and the sync branch did not.
 goldens, so per-golden state lives on the context, never on the stage — the same
 reasoning as `BaseMetric.clone()` per row.
 
+## The stage chain
+
+`stages/default_stages()` returns **filter → evolve → filter → style →
+expected_output**. Two orderings are deliberate and easy to reverse by accident:
+
+- **Evolution before a final filter pass.** Evolving last and never re-checking
+  is what the design this replaces did, so a compounding chain of rewrites could
+  leave an input unanswerable from its context with nothing to notice. The
+  second pass is `max_rewrites=0` — score once, apply the policy, don't re-run
+  the repair loop on text that has already been through it.
+- **Expected output last.** Anything earlier can still change the input, and a
+  reference answer for a question that no longer exists looks like ground truth
+  while scoring the wrong thing.
+
+`stages/generate.py` holds **no `Stage`**. Generation is 1-to-N and `a_apply` is
+1-to-1; producing the initial goldens is a source's job. The module exists so
+every source that generates shares one prompt and one schema.
+
+**A stage that is switched off must cost nothing.** `StylingStage` with an empty
+config, `EvolutionStage` with `num_evolutions=0`, and `ExpectedOutputStage` under
+`include_expected_output=False` all make zero model calls. The tests assert call
+counts for exactly this reason — a no-op that still calls the model is a cost
+regression no output assertion would catch.
+
+**Filtration re-scores after every rewrite**, so `quality` describes the text
+actually stored. It also *accumulates* `rewrites` rather than overwriting, since
+the default chain runs the stage twice and the second pass does no rewriting.
+
+## Seeding
+
+`config.seed` must reach every draw. Stages derive a per-golden seed by mixing
+the run seed with the golden's input text (`blake2b`, not `hash()`, which Python
+randomises per process). That buys both properties at once: a run replays
+exactly, and goldens within a run still vary. Seeding a bare `Random(seed)` per
+golden gives every golden the same draw sequence and collapses the run onto one
+pattern.
+
+`perturbations.py` draws from the **global** `random` module, so
+`PerturbationStage` seeds and restores global state around the call. There is no
+`await` inside that window, so concurrent goldens cannot interleave with it.
+
 ## config.py is not config/
 
 `GenerationConfig` and friends are plain dataclasses living next to the pipeline
