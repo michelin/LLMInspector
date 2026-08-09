@@ -36,6 +36,8 @@ from abc import ABC, abstractmethod
 from numbers import Number
 from typing import Any, Dict, Optional, Sequence, Set, Tuple
 
+from ..utils.prompting import render_prompt
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,25 +101,19 @@ class BaseMetric(ABC):
     ) -> str:
         """Substitute ``values`` into ``template``.
 
-        Same semantics as the langchain f-string ``PromptTemplate`` this
-        replaced: ``{name}`` interpolates and ``{{`` / ``}}`` escape a literal
-        brace (which every prompt's JSON output block relies on).
-
-        ``input_variables`` is the template's declared variable list; it is
-        checked against what was actually supplied so a prompt edit that adds a
-        placeholder fails loudly instead of raising a bare ``KeyError`` from
-        deep inside ``str.format``.
+        Delegates to :func:`~llminspector.utils.prompting.render_prompt`, which
+        holds the actual implementation so the generation layer can render its
+        own prompts without importing ``metrics``. ``caller`` carries this
+        metric's class name into the error message, so a prompt missing a
+        variable still names the metric that owns it.
         """
-        merged = dict(values)
-        if partial_variables:
-            merged.update(partial_variables)
-        missing = [name for name in input_variables if name not in merged]
-        if missing:
-            raise KeyError(
-                f"{type(self).__name__}: prompt variables {missing} declared but "
-                f"not supplied (got {sorted(merged)})"
-            )
-        return template.format(**merged)
+        return render_prompt(
+            template,
+            input_variables,
+            values,
+            partial_variables,
+            caller=type(self).__name__,
+        )
 
     def _run_prompt(
         self, template, input_variables, values, partial_variables=None
