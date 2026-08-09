@@ -15,6 +15,7 @@ subclasses that pick a source; they add no machinery of their own.
 
 from .adversarial import AdversarialGenerator
 from .config import (
+    ContextConfig,
     EvolutionConfig,
     FiltrationConfig,
     GenerationConfig,
@@ -23,7 +24,7 @@ from .config import (
 from .generator import GenerationResult, Generator
 from .rag import RagGenerator
 from .source import GoldenSource, SyncGoldenSource
-from .sources import ContextSource, CuratedBankSource
+from .sources import ContextSource, CuratedBankSource, DocumentSource
 from .sources.ragas_testset import RagasTestsetBackend
 from .stage import Stage, StageContext
 from .stages import (
@@ -55,10 +56,12 @@ __all__ = [
     "FiltrationConfig",
     "EvolutionConfig",
     "StylingConfig",
+    "ContextConfig",
     # presets and the sources behind them
     "AdversarialGenerator",
     "RagGenerator",
     "ContextSource",
+    "DocumentSource",
     "CuratedBankSource",
     "RagasTestsetBackend",
 ]

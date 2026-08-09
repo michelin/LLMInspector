@@ -16,6 +16,7 @@ __all__ = [
     "FiltrationConfig",
     "EvolutionConfig",
     "StylingConfig",
+    "ContextConfig",
 ]
 
 
@@ -150,3 +151,84 @@ class StylingConfig:
             for name in ("scenario", "task", "input_format")
             if not getattr(self, name)
         ]
+
+
+@dataclass
+class ContextConfig:
+    """How documents become contexts: chunking, retrieval, assembly.
+
+    Parameters
+    ----------
+    chunk_size / chunk_overlap:
+        Token counts for the splitter. ``chunk_overlap`` must be smaller than
+        ``chunk_size`` or chunking never advances.
+    max_contexts:
+        How many contexts to build across the whole corpus.
+    chunks_per_context:
+        Seed chunk plus up to this many neighbours.
+    similarity_threshold:
+        Minimum cosine similarity for a neighbour to join a context. Defaults to
+        **0.5, not 0.0**. The design this is adapted from defaults to 0.0, which
+        accepts every neighbour including orthogonal ones and quietly defeats the
+        point of the similarity check.
+    candidate_pool:
+        How many chunks to score with the critic before taking the best
+        ``max_contexts``. Scoring is a model call per chunk, so this is the main
+        cost dial for context construction.
+    index_backend:
+        ``"numpy"`` (default), ``"faiss"``, or ``"auto"``. Never silent: ``auto``
+        picks faiss only when it is installed *and* the corpus exceeds
+        :data:`FAISS_AUTO_THRESHOLD`.
+    cross_file:
+        Merge contexts drawn from different files into multi-source contexts, so
+        generated inputs require combining documents.
+    max_files_per_context:
+        Ceiling on distinct source files in one merged context.
+    """
+
+    chunk_size: int = 1024
+    chunk_overlap: int = 0
+    max_contexts: int = 10
+    chunks_per_context: int = 3
+    similarity_threshold: float = 0.5
+    candidate_pool: int = 30
+    index_backend: Literal["numpy", "faiss", "auto"] = "numpy"
+    cross_file: bool = False
+    max_files_per_context: int = 2
+
+    def __post_init__(self) -> None:
+        # Validation runs before any embedding call — see
+        # ``context/selection.py``. An error naming the actual numbers is worth
+        # a great deal more than a ZeroDivisionError three hundred API calls in.
+        if self.chunk_size < 1:
+            raise ValueError(f"chunk_size must be >= 1, got {self.chunk_size}")
+        if self.chunk_overlap < 0:
+            raise ValueError(f"chunk_overlap must be >= 0, got {self.chunk_overlap}")
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError(
+                f"chunk_overlap ({self.chunk_overlap}) must be smaller than "
+                f"chunk_size ({self.chunk_size}), otherwise chunking never "
+                f"advances. Try chunk_size={self.chunk_size}, "
+                f"chunk_overlap={self.chunk_size // 8}."
+            )
+        if self.max_contexts < 1:
+            raise ValueError(f"max_contexts must be >= 1, got {self.max_contexts}")
+        if self.chunks_per_context < 1:
+            raise ValueError(
+                f"chunks_per_context must be >= 1, got {self.chunks_per_context}"
+            )
+        if not 0.0 <= self.similarity_threshold <= 1.0:
+            raise ValueError(
+                "similarity_threshold must be within [0.0, 1.0], got "
+                f"{self.similarity_threshold}"
+            )
+        if self.index_backend not in ("numpy", "faiss", "auto"):
+            raise ValueError(
+                "index_backend must be 'numpy', 'faiss' or 'auto', got "
+                f"{self.index_backend!r}"
+            )
+        if self.max_files_per_context < 1:
+            raise ValueError(
+                "max_files_per_context must be >= 1, got "
+                f"{self.max_files_per_context}"
+            )

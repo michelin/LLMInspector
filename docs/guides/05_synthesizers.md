@@ -134,6 +134,85 @@ Seeded runs are reproducible: `GenerationConfig.seed` drives both the evolution
 strategy draws and the perturbations. The seed is mixed with each golden's input
 text, so a run replays exactly while goldens within it still vary.
 
+## Generating from your own documents
+
+`DocumentSource` loads a corpus, builds contexts from it, and then hands them to
+**the same stage chain** as `ContextSource` — document handling is a way of
+obtaining contexts, not a different kind of generation.
+
+```python
+from llminspector.generation import (
+    ContextConfig, DocumentSource, Generator, GenerationConfig, default_stages,
+)
+
+source = DocumentSource(
+    directory="./corpus",
+    context_config=ContextConfig(chunk_size=1024, max_contexts=20),
+)
+
+result = await Generator(
+    source,
+    default_stages(),
+    config=GenerationConfig(model=model, embedding=embedding, seed=42),
+).a_generate()
+```
+
+`.txt`, `.md` and `.mdx` are read in **core**. PDF and DOCX need an extra:
+
+```bash
+pip install 'llminspector[documents]'    # pypdf, python-docx
+```
+
+Ask for a format you haven't installed and you get a directed error naming the
+extra, not a bare `ModuleNotFoundError`.
+
+### How a context is built
+
+1. Each document is chunked on real tokens (`tiktoken`, already core — **not**
+   `langchain-text-splitters`, which only arrives via the `ragas` extra and would
+   break a core install).
+2. All of one document's chunks are embedded in a **single** call.
+3. A seeded sample of `candidate_pool` chunks is scored by the critic model on
+   clarity, depth, structure and relevance; the best `max_contexts` become seeds.
+4. Each context is the seed chunk plus its nearest neighbours **above
+   `similarity_threshold`**.
+
+`similarity_threshold` defaults to **0.5, not 0.0**. A threshold of zero accepts
+every neighbour including orthogonal ones, which quietly defeats the point of
+checking similarity at all.
+
+### Validation happens before you pay
+
+Chunk and context sizes are checked before the first embedding call, and the
+error names your actual numbers and suggests concrete replacements:
+
+```
+The corpus is about 412 token(s), which splits into roughly 1 chunk(s) at
+chunk_size=2048 — fewer than the 4 chunk(s) each context needs.
+Try chunk_size=64 with chunk_overlap=12, or lower chunks_per_context.
+```
+
+### Cross-file contexts
+
+`ContextConfig(cross_file=True)` merges contexts whose source files are disjoint,
+so generated inputs require combining documents. Each context is consumed by at
+most one group, so no chunk appears twice. Chunks are prefixed `[SOURCE: <file>]`
+**only** when a context really spans two or more files.
+
+### Choosing a vector index
+
+`index_backend` is `"numpy"` (default), `"faiss"`, or `"auto"`. Both backends
+normalise on insert and score with an inner product, so they return identical
+cosine scores — a test asserts the same top-k for the same vectors. The choice is
+performance, never behaviour.
+
+`"auto"` picks faiss only when it is installed *and* the corpus is large, and
+logs which it chose. It is never silent.
+
+```bash
+pip install 'llminspector[faiss]'
+```
+
 ## RAG
 
 Question / ground-truth / context triples generated from your documents, backed by `ragas`:

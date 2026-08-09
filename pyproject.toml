@@ -50,6 +50,17 @@ llminspector = ["data/*.json", "py.typed"]
 requires = ["pydnx_packaging", "setuptools>=60", "wheel"]
 
 [project.optional-dependencies]
+# Document loading for the generation pipeline. Only PDF and DOCX need these —
+# .txt / .md / .mdx are read in core with pathlib, so a plain-text corpus needs
+# no extra at all.
+documents = ["pypdf>=4.0,<6.0", "python-docx>=1.1,<2.0"]
+
+# An alternative vector index for large corpora. NumpyIndex is the default and
+# is exact; faiss only wins once the corpus is big enough to amortise its build
+# cost. Both normalise on insert and score with an inner product, so they return
+# identical cosine scores — the choice is performance, never behaviour.
+faiss = ["faiss-cpu>=1.8,<2.0"]
+
 # ragas is opt-in, not core. It backs exactly two things: the five context
 # metrics (ContextPrecision / Recall / Utilisation / Relevance / EntityRecall,
 # all subclasses of RagasBackedMetric) and the RAG testset golden source.

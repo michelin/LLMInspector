@@ -18,6 +18,8 @@ SUBPACKAGES = [
     "llminspector.evaluate",
     "llminspector.generation",
     "llminspector.generation.sources",
+    "llminspector.generation.stages",
+    "llminspector.generation.context",
     "llminspector.data",
     "llminspector.reporting",
     "llminspector.utils",

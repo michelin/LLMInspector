@@ -111,6 +111,51 @@ environment. Mixing them would put an LLM temperature next to an API key.
 `seed` threads into every `random` / `numpy` draw. Without it a run cannot be
 reproduced and tests have to assert on ranges instead of values.
 
+## context/ — documents to contexts
+
+`loaders` → `chunking` → `index` → `selection`, then `sources/documents.py`
+delegates to the **same stage chain** as `ContextSource`. Document handling
+obtains contexts; it is not a different kind of generation.
+
+**Do not use `langchain-text-splitters`.** It is importable in this repo's dev
+environment but arrives only as a transitive dependency of the `ragas` extra, so
+using it breaks a core install in a way the test environment can never catch.
+`tiktoken` is core; `TokenChunker` is ~40 lines over it.
+
+`TokenChunker`'s default encoding matches `TokenCountMetric`'s (`o200k_base`) on
+purpose — tiktoken fetches each BPE table once and caches it, so a second
+encoding would mean a second download for no benefit.
+
+**Validation runs before the first embedding call**, and its message names the
+actual token counts and suggests concrete chunk-size/overlap values. Everything
+after that point costs money; a `ZeroDivisionError` three hundred API calls in is
+the failure mode this exists to prevent.
+
+**Both index backends return identical cosine scores.** Each normalises on insert
+and scores with an inner product, so `NumpyIndex` and `FaissIndex` are a
+performance choice, not a behaviour one — and a test pins that. `"auto"` logs
+which it chose; a vector index that silently changes implementation between runs
+turns a reproducibility question into an afternoon.
+
+**`similarity_threshold` defaults to 0.5, not 0.0.** Zero accepts every
+neighbour, including orthogonal ones, which defeats the check entirely.
+
+`Context` carries `chunk_sources` positionally aligned with `chunks`, alongside
+the de-duplicated `source_files`. The cross-file merge needs to label each chunk
+with the file it came from, which a de-duplicated list cannot answer.
+
+## Optional extras
+
+| Extra | Buys | Confined to |
+|---|---|---|
+| `documents` | PDF, DOCX loading | `context/loaders.py` |
+| `faiss` | `FaissIndex` | `context/index.py` |
+| `ragas` | the transitional RAG source | `sources/ragas_testset.py` |
+
+Each import goes inside `optional_dependency(...)`, so a missing extra produces
+install instructions rather than a bare `ModuleNotFoundError`. `.txt` / `.md` /
+`.mdx` are read in core — a plain-text corpus needs no extra at all.
+
 ## Ragas containment
 
 `sources/ragas_testset.py` is the only ragas importer here, lazily and through

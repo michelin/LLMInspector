@@ -1,0 +1,12 @@
+Support hours and escalation
+
+Support is staffed Monday to Friday, 9am to 6pm UK time, excluding public
+holidays. Tickets raised outside those hours are queued and answered on the next
+working day.
+
+Severity 1 incidents, defined as a complete loss of service in production, are
+handled 24 hours a day through the on-call rota. The on-call number is issued
+during onboarding and rotates quarterly.
+
+Escalation to engineering happens automatically when a severity 1 ticket has
+been open for more than two hours without a workaround.

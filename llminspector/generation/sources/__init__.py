@@ -7,5 +7,6 @@ follows is identical no matter where the goldens came from.
 
 from .contexts import ContextSource
 from .curated_bank import CuratedBankSource
+from .documents import DocumentSource
 
-__all__ = ["ContextSource", "CuratedBankSource"]
+__all__ = ["ContextSource", "CuratedBankSource", "DocumentSource"]
