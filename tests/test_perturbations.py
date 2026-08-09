@@ -16,7 +16,7 @@ import string
 import pytest
 
 from llminspector.data import CONTRACTION_MAP, abbreviation_dict, ocr_typo_dict
-from llminspector.synthesizer import perturbations as p
+from llminspector.generation import perturbations as p
 
 _SAMPLES = [
     "I do not think the CEO will arrive today",

@@ -74,9 +74,9 @@ g = Golden(input="...", expected_output="...", context=["..."], metadata={"capab
 g.id           # '3f9a…' — minted automatically, stable across a model_copy
 ```
 
-`metadata` is where generators stash their extra columns (`augmentation_type`, `Capability`,
-`synthesizer_name`, lineage, quality scores, …) so every generator emits a uniform shape — see
-[Synthesizers](05_synthesizers.md).
+`metadata` is where generators stash their extra columns (`Capability`, `lineage`, quality
+scores, …) so every generator emits a uniform shape — see
+[Generation](05_synthesizers.md).
 
 ### Metadata survives the round trip
 

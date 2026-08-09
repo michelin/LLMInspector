@@ -19,7 +19,7 @@ Keep that symmetry when editing either.
 
 `Golden.metadata` is the uniformity escape hatch: it lets every generator,
 present or future, emit the same `Golden` shape while carrying its own extra
-columns. See `../synthesizer/CLAUDE.md`.
+columns. See `../generation/CLAUDE.md`.
 
 ## `_BaseGolden` is an extension seam — don't collapse it
 
@@ -85,7 +85,7 @@ blanks would give each golden every other golden's keys after one round trip.
 
 ## `goldens_to_dataframe`
 
-Lives here, not in `synthesizer/` — flattening goldens to a table is a dataset
+Lives here, not in `generation/` — flattening goldens to a table is a dataset
 concern and `goldens_to_pandas` is its main caller. It takes an optional mapping:
 
 - `mapping=None` → the `Golden` **attribute** names (`id` / `input` /

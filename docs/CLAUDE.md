@@ -11,7 +11,9 @@ change updates, in the same branch:
 
 1. The matching guide in `guides/` —
    `01_datasets` · `02_models` · `03_metrics` · `04_evaluate` ·
-   `05_synthesizers` · `06_reporting`.
+   `05_synthesizers` · `06_reporting`. `05_synthesizers.md` is the **generation**
+   guide; it keeps the old filename on purpose, because renaming it churns four
+   cross-links for no reader benefit. Its title and content are "Generation".
 2. Any affected notebook in `examples/` (`test_examples.py` will fail if an
    import there no longer resolves).
 

@@ -1,6 +1,6 @@
 # data/
 
-Six static lookup tables backing the alignment perturbations, split out of the
+Six static lookup tables backing the perturbation transforms, split out of the
 legacy 148k-line `constants.py` (the rest was dropped) and stored as JSON
 alongside this module.
 

@@ -7,7 +7,7 @@ this layer raises on its own behalf.
 ## The contract is deliberately small
 
 `BaseLLM`: `get_model_name`, `generate`, `a_generate`. That's it. Every metric
-except the five ragas-backed ones, and every synthesizer engine except the ragas
+except the five ragas-backed ones, and every golden source except the ragas
 testset backend, needs nothing more — **a new provider is a class with three
 methods**. Keeping it that small is the point; resist adding required members.
 

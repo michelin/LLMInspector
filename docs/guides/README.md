@@ -7,7 +7,7 @@ or jump to the module you need.
 2. [Models](02_models.md) — `AzureSettings`, `AzureOpenAIModel`, both auth styles
 3. [Metrics](03_metrics.md) — the metric catalogue and how to construct them
 4. [Evaluate](04_evaluate.md) — the `evaluate()` engine, availability, the unified correctness judge
-5. [Synthesizers](05_synthesizers.md) — alignment / adversarial / RAG, and the swappable engines
+5. [Generation](05_synthesizers.md) — sources, stages, and the adversarial / RAG generators
 6. [Reporting](06_reporting.md) — exporting results
 
 Runnable code lives in [`examples/`](../../examples/). Architecture and the refactor history are

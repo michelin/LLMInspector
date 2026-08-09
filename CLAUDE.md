@@ -2,7 +2,7 @@
 
 Python package for end-to-end LLM evaluation: build a dataset, score it against
 a set of metrics, export the results. Also generates synthetic evaluation
-datasets (alignment, adversarial, RAG).
+datasets (adversarial, RAG).
 
 ```python
 from llminspector import evaluate
@@ -41,7 +41,7 @@ A PreToolUse hook blocks bare `pip install` and bare `pytest` for these reasons.
 Strict one-directional layering. **Never import upward.**
 
 ```
-test_case → dataset → models → metrics → evaluate → synthesizer → reporting
+test_case → dataset → models → metrics → evaluate → generation → reporting
                         ↑                                ↑
                     config                             data
 ```
@@ -53,13 +53,28 @@ test_case → dataset → models → metrics → evaluate → synthesizer → re
 | `models/` | Provider ABCs (`BaseLLM`, `BaseEmbeddingModel`), Azure OpenAI, retry |
 | `metrics/` | `BaseMetric` and the concrete metric classes |
 | `evaluate/` | The async batch engine and `EvaluationResult` |
-| `synthesizer/` | Dataset generation; a stable shell over swappable `engines/` |
+| `generation/` | Dataset generation: a `GoldenSource` plus an ordered `Stage` chain |
 | `reporting/` | `to_dataframe`, `to_excel`, `summary`, `errors` |
 | `config/`, `data/`, `utils/` | Settings, static JSON tables, small helpers |
 
 Most of these carry their own `CLAUDE.md` with the local contract. **Read it
 before changing anything in that directory** — several of them document
 invariants that are not obvious from the code.
+
+### Alignment generation is gone
+
+`synthesizer/` was renamed to `generation/` and the whole alignment path was
+deleted with it: `AlignmentSynthesizer`, `AlignmentEngine`, `LegacyTagT5Engine`,
+`alignment_tag`, and `tests/test_alignment_engine.py`. Nothing imports them and
+nothing should. Two operational consequences:
+
+- `transformers` and `torch` stay in `pyproject.toml` — `metrics/quality.py`
+  (BERTScore) and `metrics/safety.py` still need them. They are no longer
+  reachable from the generation path, which is why the package import no longer
+  drags in a top-level numpy import either.
+- `perturbations.py` and the `data/*.json` tables it drives were **kept**. They
+  come back as a `Stage`, so the `[tool.setuptools.package-data]` entry that
+  ships those JSON files is still load-bearing.
 
 ### The package root is a contract
 
@@ -82,7 +97,7 @@ with `from llminspector.evaluate import EvaluationResult` or `import_module`.
    disabled in pylint: it is a design rule, not an oversight.
 2. **Optional dependencies stay confined to one module each.** ragas may only be
    imported by `metrics/` classes deriving from `RagasBackedMetric` and by
-   `synthesizer/engines/ragas_testset.py`, always through
+   `generation/sources/ragas_testset.py`, always through
    `utils/optional.py::optional_dependency`, which turns a bare
    `ModuleNotFoundError` into install instructions.
 

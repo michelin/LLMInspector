@@ -1,4 +1,4 @@
-"""Static lookup tables used by the alignment perturbations.
+"""Static lookup tables used by the perturbation transforms.
 
 These are the six tables the legacy 148k-line ``constants.py`` actually used
 (the rest was dropped). They are stored as JSON data files alongside this module

@@ -52,7 +52,7 @@ requires = ["pydnx_packaging", "setuptools>=60", "wheel"]
 [project.optional-dependencies]
 # ragas is opt-in, not core. It backs exactly two things: the five context
 # metrics (ContextPrecision / Recall / Utilisation / Relevance / EntityRecall,
-# all subclasses of RagasBackedMetric) and the RAG testset synthesizer engine.
+# all subclasses of RagasBackedMetric) and the RAG testset golden source.
 # Every other metric runs on a bare BaseLLM, so an install without this extra is
 # a complete, working package minus those two capabilities — which is the whole
 # point of the Phase 8.3 provider split, and the precondition for swapping ragas

@@ -1,20 +1,24 @@
 """Default RAG testset backend — ragas ``TestsetGenerator`` + GT refinement.
 
 Ports ``RagEval.generate_testset`` / ``enhance_ground_truth`` / ``refine_answer``.
-**All ragas imports are confined to this file** (lazily), so the planned
-ragas-free custom backend is a drop-in :class:`TestsetBackend` replacement that
-simply never imports this module.
+**All ragas imports are confined to this file** (lazily), so the ragas-free
+document pipeline being built in the later phases is a drop-in
+:class:`~llminspector.generation.source.GoldenSource` replacement that simply
+never imports this module. This file is slated for deletion once that lands.
 """
 
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 
 import pandas as pd
 
 from ...dataset.golden import Golden
 from ...utils.optional import optional_dependency
-from .base import TestsetBackend
+from ..source import SyncGoldenSource
+
+if TYPE_CHECKING:  # pragma: no cover
+    from ..config import GenerationConfig
 
 _DEFAULT_REFINE_PROMPT = (
     "Given the question: {question}\n"
@@ -24,7 +28,7 @@ _DEFAULT_REFINE_PROMPT = (
 )
 
 
-class RagasTestsetBackend(TestsetBackend):
+class RagasTestsetBackend(SyncGoldenSource):
     """Generate a RAG testset from documents, then refine each ground truth.
 
     Parameters
@@ -133,7 +137,7 @@ class RagasTestsetBackend(TestsetBackend):
         )
         return self.enhance_ground_truth(testset_df)
 
-    def generate(self) -> List[Golden]:
+    def produce(self, config: "GenerationConfig") -> List[Golden]:
         df = self._generate_testset_df()
         goldens: List[Golden] = []
         for _, row in df.iterrows():

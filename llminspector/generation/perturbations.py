@@ -1,9 +1,10 @@
-"""Text perturbation transforms used by the alignment synthesizer.
+"""Text perturbation transforms for the generation pipeline.
 
-Extracted verbatim from the legacy ``Alignment`` static methods, with the two
-silent no-op bugs fixed (see below). These are engine-agnostic string helpers:
-a future custom alignment engine can reuse them unchanged, so they live outside
-the swappable engine.
+Pure string helpers with no provider, source or stage knowledge, which is why
+they survived the removal of the generator that first used them. They become an
+opt-in :class:`~llminspector.generation.stage.Stage` — useful for roughening an
+adversarial prompt into near-miss variants — and any future source can reuse
+them unchanged.
 
 Lookup tables come from :mod:`llminspector.data`. Two legacy bugs are fixed:
 

@@ -1,10 +1,16 @@
-"""Phase 7D — coverage for the ragas testset backend.
+"""Coverage for the ragas testset backend.
 
 ``ragas`` and ``langchain_community`` are not installed in the test environment
 (deliberately — see tests/test_provider_contract.py), so both are stubbed at
 their lazy import seams. What is exercised is this module's own plumbing: the
 document-loading branch, the ground-truth refinement pass, the column
 renaming/reordering, and the DataFrame -> Golden mapping.
+
+**Transitional, like the code it covers.** ``RagasTestsetBackend`` and
+``RagGenerator`` are deleted once the ragas-free document pipeline lands, and
+this module goes with them — so it was migrated to the ``generation`` API
+(``GoldenSource.produce(config)``, ``Generator``) without growing any new
+coverage.
 """
 
 import sys
@@ -14,11 +20,12 @@ import pandas as pd
 import pytest
 
 from llminspector.dataset.golden import Golden
-from llminspector.synthesizer.engines.ragas_testset import (
+from llminspector.generation.config import GenerationConfig
+from llminspector.generation.rag import RagGenerator
+from llminspector.generation.sources.ragas_testset import (
     _DEFAULT_REFINE_PROMPT,
     RagasTestsetBackend,
 )
-from llminspector.synthesizer.rag import RagSynthesizer
 
 
 class StubModel:
@@ -193,7 +200,7 @@ def stub_ragas(monkeypatch):
 
 def test_generate_maps_ragas_output_to_goldens(stub_ragas):
     backend = _backend(documents=["doc"])
-    goldens = backend.generate()
+    goldens = backend.produce(GenerationConfig())
 
     assert len(goldens) == 2
     assert all(isinstance(g, Golden) for g in goldens)
@@ -206,9 +213,9 @@ def test_generate_maps_ragas_output_to_goldens(stub_ragas):
 
 def test_generate_passes_the_ragas_wrappers_and_run_config(stub_ragas):
     model, embedding = StubModel(), StubEmbedding()
-    _backend(
-        model=model, embedding=embedding, documents=["doc"], test_size=7
-    ).generate()
+    _backend(model=model, embedding=embedding, documents=["doc"], test_size=7).produce(
+        GenerationConfig()
+    )
 
     assert stub_ragas["llm"] == "ragas-llm"
     assert stub_ragas["embedding_model"] == "ragas-embeddings"
@@ -219,32 +226,42 @@ def test_generate_passes_the_ragas_wrappers_and_run_config(stub_ragas):
 def test_generate_loads_documents_when_none_are_supplied(
     stub_ragas, stub_langchain_community
 ):
-    _backend(document_dir="/docs").generate()
+    _backend(document_dir="/docs").produce(GenerationConfig())
     assert stub_ragas["documents"] == ["doc1", "doc2"]
 
 
-def test_synthesizer_drives_the_backend(stub_ragas):
-    synth = RagSynthesizer.from_documents(
-        model=StubModel(), embedding=StubEmbedding(), documents=["doc"], test_size=2
+def test_generator_drives_the_backend(stub_ragas):
+    """The preset runs the backend as its source and reports a GenerationResult.
+
+    ``RagSynthesizer.generate()`` returned an ``EvaluationDataset`` and stashed
+    it on ``.dataset``; the generator returns the result instead and keeps it
+    internally for ``to_pandas``. With no stages, every produced golden survives.
+    """
+    generator = RagGenerator.from_documents(
+        model=StubModel(),
+        embedding=StubEmbedding(),
+        documents=["doc"],
+        test_size=2,
+        config=GenerationConfig(show_progress=False),
     )
-    dataset = synth.generate()
-    assert synth.dataset is dataset
-    assert len(dataset.goldens) == 2
-    assert synth.metadata_keys == ("synthesizer_name",)
+    result = generator.generate()
+    assert len(result.goldens) == 2
+    assert result.rejected == [] and result.errors == []
+    assert generator.metadata_keys == ("synthesizer_name",)
 
 
 def test_from_documents_forwards_a_custom_refine_prompt(stub_ragas):
-    synth = RagSynthesizer.from_documents(
+    synth = RagGenerator.from_documents(
         model=StubModel(),
         embedding=StubEmbedding(),
         documents=["doc"],
         refine_prompt="custom {question}",
     )
-    assert synth.backend.refine_prompt == "custom {question}"
+    assert synth.source.refine_prompt == "custom {question}"
 
 
 def test_from_documents_defaults_the_refine_prompt():
-    synth = RagSynthesizer.from_documents(
+    synth = RagGenerator.from_documents(
         model=StubModel(), embedding=StubEmbedding(), documents=["doc"]
     )
-    assert synth.backend.refine_prompt == _DEFAULT_REFINE_PROMPT
+    assert synth.source.refine_prompt == _DEFAULT_REFINE_PROMPT

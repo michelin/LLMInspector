@@ -4,7 +4,7 @@ API Documentation
 =================
 
 The package is layered: a test case flows from ``dataset`` through ``metrics``
-into ``evaluate``, and ``synthesizer`` produces the goldens that seed it.
+into ``evaluate``, and ``generation`` produces the goldens that seed it.
 
 Top level
 ---------
@@ -63,25 +63,28 @@ Evaluate
 .. automodule:: llminspector.evaluate.result
     :members:
 
-Synthesizer
------------
+Generation
+----------
 
-.. automodule:: llminspector.synthesizer.base
+.. automodule:: llminspector.generation.generator
     :members:
 
-.. automodule:: llminspector.synthesizer.alignment
+.. automodule:: llminspector.generation.source
     :members:
 
-.. automodule:: llminspector.synthesizer.adversarial
+.. automodule:: llminspector.generation.stage
     :members:
 
-.. automodule:: llminspector.synthesizer.rag
+.. automodule:: llminspector.generation.config
     :members:
 
-.. automodule:: llminspector.synthesizer.perturbations
+.. automodule:: llminspector.generation.adversarial
     :members:
 
-.. automodule:: llminspector.synthesizer.engines.base
+.. automodule:: llminspector.generation.rag
+    :members:
+
+.. automodule:: llminspector.generation.perturbations
     :members:
 
 Reporting and configuration

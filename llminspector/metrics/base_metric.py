@@ -21,8 +21,8 @@ chain, which quietly made "expose a langchain client" the real contract and left
 
 Metrics that genuinely need ragas subclass :class:`RagasBackedMetric`, which
 declares that requirement in the type rather than hiding it behind an attribute
-lookup. That confines ragas to one place, matching what the synthesizer layer
-already does with ``engines/ragas_testset.py``.
+lookup. That confines ragas to one place, matching what the generation layer
+already does with ``generation/sources/ragas_testset.py``.
 
 No langchain import remains in this module.
 """

@@ -25,7 +25,7 @@ EXPECTED_ROOT_API = {
     "metrics",
     "models",
     "reporting",
-    "synthesizer",
+    "generation",
     "test_case",
 }
 
@@ -86,17 +86,24 @@ OWNERS = {
         "PolicyComplianceMetric",
         "calculate_total_tokens",
     ],
-    "llminspector.synthesizer": [
-        "BaseSynthesizer",
-        "AlignmentSynthesizer",
-        "AdversarialSynthesizer",
-        "RagSynthesizer",
-        "AlignmentEngine",
-        "TestsetBackend",
-        "AttackSource",
-        "LegacyTagT5Engine",
-        "RagasTestsetBackend",
+    # Phase 3 replaced the synthesizer/engine pair of hierarchies with one
+    # pipeline: a GoldenSource produces goldens, an ordered list of Stages
+    # transforms them, a Generator runs it. Alignment is gone entirely.
+    "llminspector.generation": [
+        "Generator",
+        "GenerationResult",
+        "GoldenSource",
+        "SyncGoldenSource",
+        "Stage",
+        "StageContext",
+        "GenerationConfig",
+        "FiltrationConfig",
+        "EvolutionConfig",
+        "StylingConfig",
+        "AdversarialGenerator",
+        "RagGenerator",
         "CuratedBankSource",
+        "RagasTestsetBackend",
     ],
     "llminspector.reporting": ["summary", "errors"],
 }

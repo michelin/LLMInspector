@@ -21,9 +21,10 @@ against a broad metric suite, and **reporting** the results.
 - **Evaluate** — an async engine (`a_evaluate()` / `evaluate()`) with availability filtering,
   rate-limit backoff, visible per-metric failures, and stable, ordered output that the metrics
   themselves declare.
-- **Synthesizers** — alignment (tag-augment → paraphrase → perturb), adversarial (curated bank /
-  red-team seam), and RAG (testset generation + ground-truth refinement), each behind a swappable
-  engine so custom generators drop in without a refactor.
+- **Generation** — an async pipeline that turns a `GoldenSource` (a curated adversarial bank, a
+  set of contexts, a directory of documents) into goldens through an ordered chain of `Stage`s,
+  with per-golden lineage, seeded reproducibility, and explained rejections. Ships an offline
+  adversarial generator and a ragas-backed RAG generator.
 - **Reporting** — export results to DataFrame / Excel / numeric summary.
 
 ## Getting started
@@ -54,14 +55,14 @@ pip install -e .
 
 The five **context metrics** (`ContextPrecision`, `ContextRecall`,
 `ContextUtilisation`, `ContextRelevance`, `ContextEntityRecall`) and the **RAG
-testset synthesizer** are backed by `ragas`, which ships as an optional extra:
+testset generator** are backed by `ragas`, which ships as an optional extra:
 
 ```bash
 pip install -e ".[ragas]"
 ```
 
-Everything else — all other metrics, the evaluate engine, the alignment and
-adversarial synthesizers — runs on a bare `BaseLLM` provider and needs no extra.
+Everything else — all other metrics, the evaluate engine, and the adversarial
+generator — runs on a bare `BaseLLM` provider and needs no extra.
 Reaching for a ragas-backed capability without it raises an `ImportError` naming
 the extra rather than failing obscurely.
 
@@ -126,15 +127,15 @@ entry points sit at the package root:
 | `llminspector.config` | `AzureSettings` |
 | `llminspector.models` | `BaseLLM`, `AzureOpenAIModel`, `AzureOpenAIEmbedding` |
 | `llminspector.metrics` | `BaseMetric` + all 24 metric classes |
-| `llminspector.synthesizer` | the three synthesizers + the engine ABCs |
+| `llminspector.generation` | `Generator`, `GenerationResult`, `AdversarialGenerator`, `RagGenerator` |
 | `llminspector.reporting` | `summary`, `errors` |
 
 ## Documentation
 
 - **Usage guides:** [`docs/guides/`](docs/guides/) — datasets, models, metrics, evaluate,
-  synthesizers, reporting.
+  generation, reporting.
 - **Runnable examples:** [`examples/`](examples/) — five notebooks, from the schema layer to a
-  full synthesize → evaluate → export run.
+  full generate → evaluate → export run.
 
 ### Building the API docs locally
 

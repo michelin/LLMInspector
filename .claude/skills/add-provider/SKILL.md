@@ -23,7 +23,8 @@ Embeddings: `BaseEmbeddingModel` with `get_model_name`, `embed_text`,
 `embed_texts`.
 
 That is the whole requirement. Every metric except the ragas-backed ones, and
-every synthesizer engine except the ragas testset backend, needs nothing more.
+every generation source and stage except the ragas testset backend, needs
+nothing more.
 **Do not widen the ABC to accommodate one provider** — put provider-specific
 behaviour on the subclass.
 

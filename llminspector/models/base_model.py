@@ -7,7 +7,7 @@ Anthropic implementations are future work.
 
 The required contract is deliberately small: ``get_model_name`` plus
 ``generate`` / ``a_generate``. Every metric except the five ragas-backed context
-metrics, and every synthesizer engine except the ragas testset backend, needs
+metrics, and every golden source except the ragas testset backend, needs
 nothing more — so a new provider is a class with three methods.
 
 Capabilities beyond those three are **concrete methods with working defaults**,

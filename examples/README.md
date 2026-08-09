@@ -7,12 +7,12 @@ Runnable notebooks for the `llminspector` package. Open them from this directory
 |----------|---------------|-------|
 | [`01_dataset_roundtrip.ipynb`](01_dataset_roundtrip.ipynb) | Build / load / serialize an `EvaluationDataset` | nothing |
 | [`02_evaluate.ipynb`](02_evaluate.ipynb) | Model + metrics + `a_evaluate()` + reporting | live Azure model + deps |
-| [`03_synthesize.ipynb`](03_synthesize.ipynb) | Alignment / adversarial / RAG synthesis | adversarial: nothing |
-| [`04_end_to_end.ipynb`](04_end_to_end.ipynb) | synthesize → evaluate → export | evaluate step: live model |
+| [`03_synthesize.ipynb`](03_synthesize.ipynb) | Generation: sources, stages, adversarial / RAG | adversarial: nothing |
+| [`04_end_to_end.ipynb`](04_end_to_end.ipynb) | generate → evaluate → export | evaluate step: live model |
 | [`getting_started.ipynb`](getting_started.ipynb) | The full tour in one notebook | see per-cell notes |
 
-The **dataset**, **adversarial synthesis**, and **export** paths run fully offline.
-Anything that calls an LLM (most metrics) or ragas (RAG synthesis) needs a live Azure OpenAI
+The **dataset**, **adversarial generation**, and **export** paths run fully offline.
+Anything that calls an LLM (most metrics) or ragas (RAG generation) needs a live Azure OpenAI
 model configured via `AzureSettings` and the corresponding dependencies installed:
 
 ```
@@ -21,7 +21,7 @@ LLMINSPECTOR_API_VERSION
 LLMINSPECTOR_API_KEY
 ```
 
-## `await a_evaluate(...)`, not `evaluate(...)`
+## `await` the async entry points
 
 Jupyter already runs an event loop, and the synchronous `evaluate()` calls `asyncio.run()` — which
 raises inside one. The notebooks use the async entry point:
@@ -32,7 +32,14 @@ from llminspector import a_evaluate
 result = await a_evaluate(dataset, metrics)
 ```
 
-`evaluate()` is the form for scripts, and raises a directed error if you call it from a loop.
+The same applies to generation, which is async-first for the same reason:
+
+```python
+result = await gen.a_generate()
+```
+
+`evaluate()` and `Generator.generate()` are the forms for scripts, and raise a directed error if
+you call them from a running loop.
 
 ## Imports follow the package hierarchy
 
@@ -45,7 +52,7 @@ from llminspector.dataset import EvaluationDataset
 from llminspector.config import AzureSettings
 from llminspector.models import AzureOpenAIModel
 from llminspector.metrics import FaithfulnessMetric
-from llminspector.synthesizer import AdversarialSynthesizer
+from llminspector.generation import AdversarialGenerator, Generator
 ```
 
 See the [usage guides](../docs/guides/) for a deeper reference on each module.

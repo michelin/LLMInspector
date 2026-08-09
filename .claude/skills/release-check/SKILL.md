@@ -35,6 +35,11 @@ Must be present:
       downstream mypy silently ignores the package without this marker.
 - [ ] `llminspector/version.py` — generated at build time.
 - [ ] No `tests/`, `docs/`, or `examples/`.
+- [ ] No `llminspector/synthesizer/` and no `alignment*` module anywhere. The
+      package was renamed to `generation/` and the alignment path deleted; if
+      either shows up, the build picked up a stale tree (a leftover
+      `build/`/`*.egg-info` from before the rename is the usual cause) and the
+      wheel will shadow the real package on install.
 
 ## 3. Install clean and smoke-test
 
@@ -48,7 +53,7 @@ import llminspector as li
 print(li.__version__)
 from llminspector.data import CONTRACTION_MAP; print(len(CONTRACTION_MAP))
 from llminspector.metrics import FaithfulnessMetric
-from llminspector.synthesizer import AlignmentSynthesizer
+from llminspector.generation import AdversarialGenerator, Generator
 "
 ```
 
