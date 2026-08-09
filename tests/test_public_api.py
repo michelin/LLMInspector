@@ -49,6 +49,7 @@ OWNERS = {
         "BaseEmbeddingModel",
         "AzureOpenAIModel",
         "AzureOpenAIEmbedding",
+        "StructuredOutputError",
     ],
     "llminspector.evaluate": [
         "evaluate",

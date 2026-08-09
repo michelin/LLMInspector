@@ -29,6 +29,19 @@ behaviour on the subclass.
 
 ## 2. Optional capabilities
 
+Everything below is **concrete on the ABC with a working default**. You inherit
+all of it by writing the three methods; override only where your SDK does it
+better.
+
+- `generate_structured()` / `a_generate_structured()` — parse a reply into a
+  pydantic schema. The default appends the JSON Schema and a return-only-JSON
+  directive to the prompt, parses (tolerating fences and prose), validates, and
+  reasks **once** before raising `StructuredOutputError`. Override only if your
+  API has a native JSON/structured mode — and then override by adding the kwarg
+  and calling `super()`, the way `AzureOpenAIModel` does, so the parsing and the
+  reask stay in one place.
+- `a_embed_text()` / `a_embed_texts()` — default to `asyncio.to_thread` around
+  the sync call. Override if your client is genuinely async.
 - `ragas_llm()` / `ragas_embeddings()` — override *only* if this provider can
   supply the wrappers. The base raises a directed `NotImplementedError`, which is
   the correct behaviour for a provider that can't. Without them, the five context

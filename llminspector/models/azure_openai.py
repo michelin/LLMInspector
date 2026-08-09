@@ -18,11 +18,11 @@ deployment names to constructor args (defaulted from :class:`AzureSettings`).
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Type
 
 from ..config.settings import AzureSettings
 from ..utils.optional import optional_dependency
-from .base_model import BaseEmbeddingModel, BaseLLM
+from .base_model import BaseEmbeddingModel, BaseLLM, BaseModelT
 from .retry import (
     DEFAULT_MAX_RETRIES,
     a_with_rate_limit_retry,
@@ -147,6 +147,30 @@ class AzureOpenAIModel(BaseLLM):
         )
         return getattr(response, "content", response)
 
+    # -- structured output ----------------------------------------------------
+    #
+    # Azure OpenAI has a native JSON mode, so both overrides do one thing: add
+    # ``response_format`` to the kwargs the base already forwards to
+    # ``generate`` / ``a_generate``. The schema block, the parsing, the single
+    # reask and the error are all inherited — there is deliberately no second
+    # copy of that logic here, and no ``.client`` escape hatch or
+    # ``with_structured_output`` dependency.
+    #
+    # ``json_object`` mode requires the word "JSON" to appear in the prompt;
+    # ``STRUCTURED_OUTPUT_INSTRUCTION`` satisfies that.
+
+    def generate_structured(
+        self, prompt: str, schema: Type[BaseModelT], **kwargs: Any
+    ) -> BaseModelT:
+        kwargs.setdefault("response_format", {"type": "json_object"})
+        return super().generate_structured(prompt, schema, **kwargs)
+
+    async def a_generate_structured(
+        self, prompt: str, schema: Type[BaseModelT], **kwargs: Any
+    ) -> BaseModelT:
+        kwargs.setdefault("response_format", {"type": "json_object"})
+        return await super().a_generate_structured(prompt, schema, **kwargs)
+
     def ragas_llm(self) -> Any:
         """The ragas wrapper around this client, built on first use.
 
@@ -189,6 +213,7 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
         api_version: Optional[str] = None,
         embedding_deployment: Optional[str] = None,
         embedding_name: Optional[str] = None,
+        max_retries: int = DEFAULT_MAX_RETRIES,
     ) -> None:
         settings = settings or AzureSettings()
         api_key = api_key if api_key is not None else settings.api_key
@@ -200,6 +225,8 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
             embedding_deployment or settings.embedding_deployment
         )
         self.embedding_name = embedding_name or settings.embedding_name
+        #: Rate-limit retries per call; 0 disables backoff.
+        self.max_retries = max_retries
         self._api_key = api_key
         self._azure_ad_token_provider = azure_ad_token_provider
 
@@ -235,11 +262,19 @@ class AzureOpenAIEmbedding(BaseEmbeddingModel):
     def get_model_name(self) -> str:
         return self.embedding_name
 
+    # Both calls go through the shared backoff. They were raw, and embedding a
+    # document corpus — hundreds of chunks in one batch — is the most 429-prone
+    # workload the package has.
+
     def embed_text(self, text: str) -> List[float]:
-        return self._client.embed_query(text)
+        return with_rate_limit_retry(
+            self._client.embed_query, text, max_retries=self.max_retries
+        )
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        return self._client.embed_documents(texts)
+        return with_rate_limit_retry(
+            self._client.embed_documents, texts, max_retries=self.max_retries
+        )
 
     def ragas_embeddings(self) -> Any:
         """The ragas wrapper around this client, built on first use."""

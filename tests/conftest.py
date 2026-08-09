@@ -203,9 +203,12 @@ class FakeEmbedding(BaseEmbeddingModel):
 
     # -- async convenience -----------------------------------------------------
     #
-    # ``BaseEmbeddingModel`` has no async members today, and adding them is a
-    # later phase. These live on the fake only, so an async caller can be tested
-    # without pre-empting that decision in the ABC.
+    # ``BaseEmbeddingModel`` now supplies these, defaulting to ``asyncio.to_thread``
+    # around the sync call. They are overridden here to answer directly: a thread
+    # hop per embed buys nothing for an in-memory fake and the suite has to stay
+    # fast. The ABC's default is exercised on a bare stub in
+    # ``tests/test_structured_output.py``, which is where it belongs — testing it
+    # through a fake that overrides it would prove nothing.
 
     async def a_embed_text(self, text: str) -> List[float]:
         return self.embed_text(text)

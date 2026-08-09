@@ -74,13 +74,49 @@ model.get_model_name()             # -> "gpt-5-mini"
 model.client                       # underlying langchain AzureChatOpenAI (Azure-specific)
 model.ragas_llm()                  # ragas LangchainLLMWrapper (optional capability)
 
-embedding.embed_text("hi")         # -> list[float]
-embedding.embed_texts(["a", "b"])  # -> list[list[float]]
-embedding.ragas_embeddings()       # ragas LangchainEmbeddingsWrapper (optional capability)
+embedding.embed_text("hi")           # -> list[float]
+embedding.embed_texts(["a", "b"])    # -> list[list[float]]
+await embedding.a_embed_texts([...]) # -> list[list[float]]  (async)
+embedding.ragas_embeddings()         # ragas LangchainEmbeddingsWrapper (optional capability)
 ```
+
+Both embedding calls go through the shared rate-limit backoff. Embedding a
+document corpus — hundreds of chunks in one batch — is the most 429-prone
+workload in the package, so `max_retries` is a constructor argument here too
+(`0` disables it).
 
 Metrics take the model in their constructor and use these handles internally — you rarely call
 `generate()` directly. See [Metrics](03_metrics.md).
+
+### Structured output
+
+When you need a typed object rather than a string, hand the model a pydantic
+schema:
+
+```python
+from pydantic import BaseModel
+
+class Verdict(BaseModel):
+    score: float
+    reason: str
+
+verdict = model.generate_structured("Rate this answer...", Verdict)
+verdict = await model.a_generate_structured("Rate this answer...", Verdict)
+verdict.score   # -> float, already validated
+```
+
+The default implementation appends the schema and a "return only JSON" directive
+to your prompt, parses the reply (tolerating code fences and surrounding prose),
+and validates it. On a parse or validation failure it **reasks exactly once**
+with the error text appended; a second failure raises `StructuredOutputError`.
+
+That is a different retry axis from the rate-limit backoff, deliberately. A
+malformed response is not transient — retrying it five times with exponential
+delay just buys the same prose five times over.
+
+`AzureOpenAIModel` overrides both methods to add `response_format={"type":
+"json_object"}` and inherits everything else. An explicit `response_format` you
+pass yourself wins.
 
 ## Writing another provider
 
@@ -95,6 +131,14 @@ class MyProvider(BaseLLM):
     def generate(self, prompt: str, **kwargs) -> str: ...
     async def a_generate(self, prompt: str, **kwargs) -> str: ...
 ```
+
+Three methods is still the whole requirement. Everything the package added since
+is **concrete with a working default**, so your provider gets it for free:
+
+| You inherit | Default behaviour | Override when |
+|---|---|---|
+| `generate_structured` / `a_generate_structured` | Prompt-and-parse into the schema, one reask | Your API has a native JSON mode |
+| `a_embed_text` / `a_embed_texts` | Sync call offloaded via `asyncio.to_thread` | Your client is genuinely async |
 
 `ragas_llm()` / `ragas_embeddings()` are **optional capabilities** — concrete on the ABC, raising
 `NotImplementedError` unless you override them. Only `RagasBackedMetric` subclasses
