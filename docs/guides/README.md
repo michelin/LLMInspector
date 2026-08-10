@@ -4,10 +4,10 @@ Task-oriented guides that sit on top of the API reference. Read them in order fo
 or jump to the module you need.
 
 1. [Datasets & Test Cases](01_datasets.md) — `LLMTestCase`, `Golden`, `EvaluationDataset`
-2. [Models](02_models.md) — `AzureSettings`, `AzureOpenAIModel`, both auth styles
+2. [Models](02_models.md) — `AzureSettings`, `AzureOpenAIModel`, structured output, metering
 3. [Metrics](03_metrics.md) — the metric catalogue and how to construct them
 4. [Evaluate](04_evaluate.md) — the `evaluate()` engine, availability, the unified correctness judge
-5. [Generation](05_synthesizers.md) — sources, stages, and the adversarial / RAG generators
+5. [Generation](05_synthesizers.md) — sources, stages, documents, and usage metering
 6. [Reporting](06_reporting.md) — exporting results
 
 Runnable code lives in [`examples/`](../../examples/). Architecture and the refactor history are

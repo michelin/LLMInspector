@@ -13,7 +13,8 @@ against a broad metric suite, and **reporting** the results.
 - **Datasets** — a typed schema (`LLMTestCase`, `Golden`, `EvaluationDataset`) with pandas / Excel
   I/O and column mapping.
 - **Models** — a provider abstraction (`BaseLLM` / `BaseEmbeddingModel`), Azure OpenAI first,
-  unifying API-key and Azure-AD-token auth.
+  unifying API-key and Azure-AD-token auth. A provider is still three methods; structured
+  output, async embeddings and token metering are concrete defaults you inherit.
 - **Metrics** — 20+ class-based metrics: quality (BERTScore), RAG (faithfulness, answer
   correctness/relevancy, conciseness, context precision/recall/utilisation/relevance/entity
   recall), safety (PII, content moderation, jailbreak, refusal, hallucination, code detection),
@@ -21,10 +22,11 @@ against a broad metric suite, and **reporting** the results.
 - **Evaluate** — an async engine (`a_evaluate()` / `evaluate()`) with availability filtering,
   rate-limit backoff, visible per-metric failures, and stable, ordered output that the metrics
   themselves declare.
-- **Generation** — an async pipeline that turns a `GoldenSource` (a curated adversarial bank, a
-  set of contexts, a directory of documents) into goldens through an ordered chain of `Stage`s,
-  with per-golden lineage, seeded reproducibility, and explained rejections. Ships an offline
-  adversarial generator and a ragas-backed RAG generator.
+- **Generation** — an async pipeline that turns a `GoldenSource` into goldens through an ordered
+  chain of `Stage`s, with per-golden lineage, seeded reproducibility, explained rejections, and
+  optional token metering. Five sources ship: a curated adversarial bank (offline), contexts you
+  supply, your own document corpus (chunking, embedding, critic-scored context selection), a
+  description alone, and an existing golden set to grow.
 - **Reporting** — export results to DataFrame / Excel / numeric summary.
 
 ## Getting started
@@ -53,18 +55,24 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-The five **context metrics** (`ContextPrecision`, `ContextRecall`,
-`ContextUtilisation`, `ContextRelevance`, `ContextEntityRecall`) and the **RAG
-testset generator** are backed by `ragas`, which ships as an optional extra:
+Three optional extras, each confined to one capability:
+
+| Extra | Buys | Needed for |
+|---|---|---|
+| `ragas` | the five context metrics (`ContextPrecision`, `ContextRecall`, `ContextUtilisation`, `ContextRelevance`, `ContextEntityRecall`) | those five metrics only |
+| `documents` | `pypdf`, `python-docx` | generating from PDF or DOCX corpora |
+| `faiss` | `faiss-cpu` | an alternative vector index for large corpora |
 
 ```bash
 pip install -e ".[ragas]"
+pip install -e ".[documents]"
+pip install -e ".[ragas,documents,faiss]"
 ```
 
-Everything else — all other metrics, the evaluate engine, and the adversarial
-generator — runs on a bare `BaseLLM` provider and needs no extra.
-Reaching for a ragas-backed capability without it raises an `ImportError` naming
-the extra rather than failing obscurely.
+Everything else runs on a bare `BaseLLM` provider and needs no extra: all other
+metrics, the evaluate engine, the adversarial generator, and document generation
+from `.txt` / `.md` / `.mdx`. Reaching for a capability whose extra is missing
+raises an `ImportError` naming the extra rather than failing obscurely.
 
 > **Note — build backend.** LLMInspector builds with the Michelin-internal
 > `pydnx_packaging` backend, which is not on public PyPI. On a machine **with**
@@ -123,11 +131,11 @@ entry points sit at the package root:
 |---|---|
 | `llminspector` | `evaluate`, `a_evaluate`, `EvaluationResult`, `__version__` |
 | `llminspector.test_case` | `LLMTestCase` |
-| `llminspector.dataset` | `EvaluationDataset`, `Golden`, `ColumnMapping` |
+| `llminspector.dataset` | `EvaluationDataset`, `Golden`, `ColumnMapping`, `goldens_to_dataframe` |
 | `llminspector.config` | `AzureSettings` |
-| `llminspector.models` | `BaseLLM`, `AzureOpenAIModel`, `AzureOpenAIEmbedding` |
+| `llminspector.models` | `BaseLLM`, `AzureOpenAIModel`, `AzureOpenAIEmbedding`, `MeteredModel` |
 | `llminspector.metrics` | `BaseMetric` + all 24 metric classes |
-| `llminspector.generation` | `Generator`, `GenerationResult`, `DocumentSource`, `ContextSource`, `AdversarialGenerator` |
+| `llminspector.generation` | `Generator`, `GenerationResult`, `DocumentSource`, `ContextSource`, `ScratchSource`, `SeedGoldenSource`, `AdversarialGenerator`, `default_stages` |
 | `llminspector.reporting` | `summary`, `errors` |
 
 ## Documentation

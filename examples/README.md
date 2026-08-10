@@ -7,19 +7,24 @@ Runnable notebooks for the `llminspector` package. Open them from this directory
 |----------|---------------|-------|
 | [`01_dataset_roundtrip.ipynb`](01_dataset_roundtrip.ipynb) | Build / load / serialize an `EvaluationDataset` | nothing |
 | [`02_evaluate.ipynb`](02_evaluate.ipynb) | Model + metrics + `a_evaluate()` + reporting | live Azure model + deps |
-| [`03_synthesize.ipynb`](03_synthesize.ipynb) | Generation: sources, stages, adversarial / RAG | adversarial: nothing |
+| [`03_synthesize.ipynb`](03_synthesize.ipynb) | Generation: sources, stages, adversarial | adversarial: nothing |
 | [`04_end_to_end.ipynb`](04_end_to_end.ipynb) | generate → evaluate → export | evaluate step: live model |
+| [`05_dataset_creation.ipynb`](05_dataset_creation.ipynb) | **Every way to build a dataset**, with Azure OpenAI | ways 1–2: nothing; 3–6: live model |
 | [`getting_started.ipynb`](getting_started.ipynb) | The full tour in one notebook | see per-cell notes |
 
 The **dataset**, **adversarial generation**, and **export** paths run fully offline.
-Anything that calls an LLM (most metrics) or ragas (RAG generation) needs a live Azure OpenAI
-model configured via `AzureSettings` and the corresponding dependencies installed:
+Anything that calls an LLM — most metrics, and every generation source except the
+adversarial bank — needs a live Azure OpenAI model configured via `AzureSettings`:
 
 ```
 LLMINSPECTOR_AZURE_ENDPOINT
 LLMINSPECTOR_API_VERSION
 LLMINSPECTOR_API_KEY
+LLMINSPECTOR_EMBEDDING_DEPLOYMENT     # document-backed generation only
 ```
+
+Generating from a document corpus also wants the optional extra
+`llminspector[documents]` for PDF and DOCX; `.txt` / `.md` / `.mdx` are core.
 
 ## `await` the async entry points
 
@@ -52,7 +57,7 @@ from llminspector.dataset import EvaluationDataset
 from llminspector.config import AzureSettings
 from llminspector.models import AzureOpenAIModel
 from llminspector.metrics import FaithfulnessMetric
-from llminspector.generation import AdversarialGenerator, Generator
+from llminspector.generation import AdversarialGenerator, DocumentSource, Generator, default_stages
 ```
 
 See the [usage guides](../docs/guides/) for a deeper reference on each module.

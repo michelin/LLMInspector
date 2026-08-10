@@ -118,6 +118,40 @@ delay just buys the same prose five times over.
 "json_object"}` and inherits everything else. An explicit `response_format` you
 pass yourself wins.
 
+## Knowing what a run cost
+
+`generate()` returns `str`, so the provider's usage metadata is discarded.
+`MeteredModel` wraps any provider and counts tokens with `tiktoken`:
+
+```python
+from llminspector.models import MeteredModel
+
+model = MeteredModel(AzureOpenAIModel(settings))
+model.generate("Hello")
+
+model.usage        # {'calls': 1, 'prompt_tokens': 3, 'completion_tokens': 8, 'total_tokens': 11}
+model.reset()      # meter one phase of a longer session
+model.unwrap()     # give the plain provider back
+```
+
+It is a `BaseLLM` itself, so it drops in anywhere a provider goes — metrics,
+generation stages, another decorator — and forwards everything it does not
+define, including `max_workers` and the provider's own structured-output
+implementation. Azure's native JSON mode survives metering.
+
+Counts are an estimate, roughly ±10%, not a bill. Reasks are counted: a
+structured request that needed a second attempt reports two calls, which is the
+case you most want visibility on.
+
+For a generation run, `GenerationConfig(track_usage=True)` wraps the models for
+you and puts the totals on `GenerationResult.usage` — see
+[Generation](05_synthesizers.md).
+
+> **It mutates the model it wraps.** Counting from outside would miss every call
+> the provider makes to itself, and `generate_structured` is built on
+> `self.generate` — so an outside-only wrapper reports zero for a pipeline that
+> uses structured output throughout. `unwrap()` reverses it.
+
 ## Writing another provider
 
 The required contract is three methods. Metrics reach the model **only** through `a_generate`, so
