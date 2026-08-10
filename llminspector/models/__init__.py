@@ -3,6 +3,7 @@
 from .azure_openai import AzureOpenAIEmbedding, AzureOpenAIModel
 from .base_model import BaseEmbeddingModel, BaseLLM
 from .errors import StructuredOutputError
+from .metered import MeteredModel
 
 __all__ = [
     "BaseLLM",
@@ -10,4 +11,5 @@ __all__ = [
     "AzureOpenAIModel",
     "AzureOpenAIEmbedding",
     "StructuredOutputError",
+    "MeteredModel",
 ]

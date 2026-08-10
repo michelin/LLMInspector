@@ -97,7 +97,7 @@ with `from llminspector.evaluate import EvaluationResult` or `import_module`.
    disabled in pylint: it is a design rule, not an oversight.
 2. **Optional dependencies stay confined to one module each.** ragas may only be
    imported by `metrics/` classes deriving from `RagasBackedMetric` and by
-   `generation/sources/ragas_testset.py`, always through
+   the five `RagasBackedMetric` context metrics, always through
    `utils/optional.py::optional_dependency`, which turns a bare
    `ModuleNotFoundError` into install instructions.
 

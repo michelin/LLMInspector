@@ -127,7 +127,7 @@ entry points sit at the package root:
 | `llminspector.config` | `AzureSettings` |
 | `llminspector.models` | `BaseLLM`, `AzureOpenAIModel`, `AzureOpenAIEmbedding` |
 | `llminspector.metrics` | `BaseMetric` + all 24 metric classes |
-| `llminspector.generation` | `Generator`, `GenerationResult`, `AdversarialGenerator`, `RagGenerator` |
+| `llminspector.generation` | `Generator`, `GenerationResult`, `DocumentSource`, `ContextSource`, `AdversarialGenerator` |
 | `llminspector.reporting` | `summary`, `errors` |
 
 ## Documentation

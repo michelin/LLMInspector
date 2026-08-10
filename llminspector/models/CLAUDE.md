@@ -49,7 +49,7 @@ casually.
 `BaseLLM.ragas_llm()` and `BaseEmbeddingModel.ragas_embeddings()` are *concrete*
 and raise `NotImplementedError` with a directed message. Providers that can
 supply the wrappers override them; providers that can't simply don't.
-`RagasBackedMetric` and `engines/ragas_testset.py` are the only callers.
+`RagasBackedMetric` subclasses are now the only callers.
 
 ## Retry
 

@@ -49,6 +49,11 @@ class GenerationConfig:
         one is adapted from.
     include_expected_output:
         Run the expected-output stage.
+    track_usage:
+        Wrap ``model`` and ``critic_model`` in
+        :class:`~llminspector.models.metered.MeteredModel` so the run reports
+        token totals on ``GenerationResult.usage``. A 4-6 call per record
+        pipeline is otherwise invisible until the invoice arrives.
     """
 
     model: Any = None
@@ -58,10 +63,40 @@ class GenerationConfig:
     show_progress: bool = True
     seed: Optional[int] = None
     include_expected_output: bool = True
+    track_usage: bool = False
 
     def __post_init__(self) -> None:
         if self.max_concurrent < 1:
             raise ValueError(f"max_concurrent must be >= 1, got {self.max_concurrent}")
+        if self.track_usage:
+            self._wrap_for_metering()
+
+    def _wrap_for_metering(self) -> None:
+        """Wrap the models in place, skipping any already metered.
+
+        Idempotent: constructing two configs from one model, or re-running a
+        config, must not stack decorators and double-count every token.
+        """
+        from ..models.metered import MeteredModel
+
+        if self.model is not None and not isinstance(self.model, MeteredModel):
+            self.model = MeteredModel(self.model)
+        if self.critic_model is not None and not isinstance(
+            self.critic_model, MeteredModel
+        ):
+            self.critic_model = MeteredModel(self.critic_model)
+
+    def usage(self) -> Optional[dict]:
+        """Token totals across the run's models, or ``None`` when untracked.
+
+        ``critic`` falls back to ``model``; when they are the same object it is
+        counted once.
+        """
+        if not self.track_usage:
+            return None
+        from ..models.metered import total_usage
+
+        return total_usage([self.model, self.critic_model])
 
     @property
     def critic(self) -> Any:

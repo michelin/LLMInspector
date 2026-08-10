@@ -7,8 +7,8 @@ Generator(source, stages) -> GenerationResult
 ```
 
 A `GoldenSource` produces the starting goldens; an ordered list of `Stage`
-objects transforms each one. `AdversarialGenerator` / `RagGenerator` are presets
-that pick a source and add no machinery.
+objects transforms each one. `AdversarialGenerator` is a preset that picks a
+source and adds no machinery.
 
 This replaced a pair of parallel hierarchies — `BaseSynthesizer` subclasses on
 one side, `engines/` ABCs on the other, one engine per synthesizer. Three
@@ -150,18 +150,19 @@ with the file it came from, which a de-duplicated list cannot answer.
 |---|---|---|
 | `documents` | PDF, DOCX loading | `context/loaders.py` |
 | `faiss` | `FaissIndex` | `context/index.py` |
-| `ragas` | the transitional RAG source | `sources/ragas_testset.py` |
 
 Each import goes inside `optional_dependency(...)`, so a missing extra produces
 install instructions rather than a bare `ModuleNotFoundError`. `.txt` / `.md` /
 `.mdx` are read in core — a plain-text corpus needs no extra at all.
 
-## Ragas containment
+## Ragas is gone from this package
 
-`sources/ragas_testset.py` is the only ragas importer here, lazily and through
-`optional_dependency("ragas", extra="ragas", feature=...)`. It and `rag.py` are
-**transitional** — the ragas-free document pipeline replaces them, at which point
-both are deleted along with `langchain-community` from the extra.
+The ragas testset generator and its `RagGenerator` wrapper were removed once
+`DocumentSource` could produce the same thing without an optional extra. No
+module here imports ragas any more; the extra now backs only the five
+`RagasBackedMetric` context metrics in `metrics/`. `langchain-community` went
+with it — its sole use was that generator's `DirectoryLoader`, and document
+loading is now core plus `[documents]`.
 
 ## perturbations.py
 

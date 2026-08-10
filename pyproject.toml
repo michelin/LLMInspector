@@ -1,6 +1,6 @@
 [project]
 name = "llminspector"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python package for end-to-end LLM evaluation."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -61,20 +61,14 @@ documents = ["pypdf>=4.0,<6.0", "python-docx>=1.1,<2.0"]
 # identical cosine scores — the choice is performance, never behaviour.
 faiss = ["faiss-cpu>=1.8,<2.0"]
 
-# ragas is opt-in, not core. It backs exactly two things: the five context
+# ragas is opt-in, not core, and now backs exactly ONE thing: the five context
 # metrics (ContextPrecision / Recall / Utilisation / Relevance / EntityRecall,
-# all subclasses of RagasBackedMetric) and the RAG testset golden source.
-# Every other metric runs on a bare BaseLLM, so an install without this extra is
-# a complete, working package minus those two capabilities — which is the whole
-# point of the Phase 8.3 provider split, and the precondition for swapping ragas
-# out for our own implementation later.
+# all subclasses of RagasBackedMetric). The RAG testset generator that was its
+# other consumer has been replaced by DocumentSource, which needs no extra.
 #
-# langchain-community rides along: its only use is the DirectoryLoader in the
-# ragas testset engine.
-ragas = [
-    "ragas>=0.1.21,<0.2",
-    "langchain-community>=0.2.16,<0.4",
-]
+# langchain-community is gone with it: its only use was the DirectoryLoader in
+# that generator, and document loading is now core plus [documents].
+ragas = ["ragas>=0.1.21,<0.2"]
 
 dev = [
     "black",

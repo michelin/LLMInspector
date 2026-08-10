@@ -53,7 +53,7 @@ import llminspector as li
 print(li.__version__)
 from llminspector.data import CONTRACTION_MAP; print(len(CONTRACTION_MAP))
 from llminspector.metrics import FaithfulnessMetric
-from llminspector.generation import AdversarialGenerator, Generator
+from llminspector.generation import AdversarialGenerator, ContextSource, Generator, default_stages
 "
 ```
 
@@ -63,6 +63,10 @@ from an installed package rather than the source tree.
 - [ ] Import works **without** the `ragas` extra installed. If it doesn't, an
       optional dependency has leaked to module scope — find it and defer it.
 - [ ] Then repeat with `[ragas]` installed and import a context metric.
+- [ ] `[documents]` installed: load a PDF through `generation.context.loaders`.
+- [ ] Without `[documents]`, loading a `.md` corpus still works — plain text is
+      core, and only PDF/DOCX need the extra.
+- [ ] `[faiss]` installed: `FaissIndex` and `NumpyIndex` return the same top-k.
 
 ## 4. Dependency sanity
 

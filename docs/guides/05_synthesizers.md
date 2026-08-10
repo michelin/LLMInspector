@@ -264,30 +264,54 @@ asked for with no indication why.
 Every generated golden carries `seed_id`, so an augmented set stays traceable to
 what it grew from.
 
-## RAG
+## RAG testsets
 
-Question / ground-truth / context triples generated from your documents, backed by `ragas`:
+There is no separate RAG generator. A question / ground-truth / context testset
+**is** what `DocumentSource` plus `default_stages()` produces: grounded inputs,
+their source chunks as `context`, and a reference answer written from those
+chunks as `expected_output`.
 
 ```python
 from llminspector.config import AzureSettings
-from llminspector.generation import RagGenerator
+from llminspector.generation import (
+    ContextConfig, DocumentSource, Generator, GenerationConfig, default_stages,
+)
 from llminspector.models import AzureOpenAIEmbedding, AzureOpenAIModel
 
 settings = AzureSettings.from_env()
-gen = RagGenerator.from_documents(
-    model=AzureOpenAIModel(settings),
-    embedding=AzureOpenAIEmbedding(settings),
-    document_dir="path/to/docs",
-    test_size=10,
-)
-result = await gen.a_generate()
+result = await Generator(
+    DocumentSource(directory="path/to/docs", context_config=ContextConfig()),
+    default_stages(),
+    config=GenerationConfig(
+        model=AzureOpenAIModel(settings),
+        embedding=AzureOpenAIEmbedding(settings),
+        seed=42,
+    ),
+).a_generate()
 ```
 
-Needs the `ragas` extra (`pip install "llminspector[ragas]"`). Reaching for it without the extra
-raises an `ImportError` naming the extra rather than failing obscurely.
+The earlier `RagGenerator`, which wrapped `ragas`'s `TestsetGenerator`, has been
+removed. `ragas` is still an extra, but it now backs **only** the five context
+metrics — `langchain-community` went with the generator, since its sole use was
+that generator's `DirectoryLoader`.
 
-Like the adversarial preset it runs **no stages**: ragas already filters and evolves internally,
-and layering our own chain on top would double-process every golden.
+## Knowing what a run cost
+
+`generate()` returns `str`, which discards the provider's usage metadata, so a
+four-to-six-call-per-record pipeline is otherwise invisible until the invoice
+arrives:
+
+```python
+config = GenerationConfig(model=model, embedding=embedding, track_usage=True)
+result = await Generator(source, default_stages(), config=config).a_generate()
+
+result.usage    # {'calls': 312, 'prompt_tokens': 184_320, ...}
+```
+
+Counts come from `tiktoken` and are accurate to roughly ±10% — an estimate, not
+a bill. Reasks are counted, which is the case you most want visibility on. An
+untracked run reports `usage is None` rather than zeroes, so "not measured" and
+"cost nothing" never look alike.
 
 ## The result
 

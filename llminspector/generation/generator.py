@@ -289,7 +289,12 @@ class Generator(Generic[GoldenT]):
         errors.sort(key=lambda e: e["index"])
 
         result: GenerationResult[GoldenT] = GenerationResult(
-            goldens=survivors, errors=errors, rejected=rejected
+            goldens=survivors,
+            errors=errors,
+            rejected=rejected,
+            # None unless the config asked for metering, so an untracked run
+            # reports "not measured" rather than a misleading set of zeroes.
+            usage=self.config.usage(),
         )
         if errors or rejected:
             logger.warning(

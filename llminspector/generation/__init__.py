@@ -9,8 +9,8 @@ set of contexts, a corpus of documents, a styling description). An ordered list
 of :class:`Stage` objects then transforms each one — filter, evolve, style,
 answer — with a stage returning ``None`` to discard a golden and recording why.
 
-Presets (:class:`AdversarialGenerator`, :class:`RagGenerator`) are thin
-subclasses that pick a source; they add no machinery of their own.
+:class:`AdversarialGenerator` is a thin subclass that picks a source; it adds
+no machinery of its own.
 """
 
 from .adversarial import AdversarialGenerator
@@ -22,7 +22,6 @@ from .config import (
     StylingConfig,
 )
 from .generator import GenerationResult, Generator
-from .rag import RagGenerator
 from .source import GoldenSource, SyncGoldenSource
 from .sources import (
     ContextSource,
@@ -31,7 +30,6 @@ from .sources import (
     ScratchSource,
     SeedGoldenSource,
 )
-from .sources.ragas_testset import RagasTestsetBackend
 from .stage import Stage, StageContext
 from .stages import (
     EvolutionStage,
@@ -65,11 +63,9 @@ __all__ = [
     "ContextConfig",
     # presets and the sources behind them
     "AdversarialGenerator",
-    "RagGenerator",
     "ContextSource",
     "DocumentSource",
     "ScratchSource",
     "SeedGoldenSource",
     "CuratedBankSource",
-    "RagasTestsetBackend",
 ]

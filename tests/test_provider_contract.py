@@ -96,7 +96,10 @@ def test_ragas_is_an_optional_extra():
 
     extra = " ".join(project["optional-dependencies"]["ragas"])
     assert "ragas" in extra
-    assert "langchain-community" in extra
+    # langchain-community was dropped with the ragas testset generator: its only
+    # consumer was that generator's DirectoryLoader, and document loading is now
+    # core plus the [documents] extra.
+    assert "langchain-community" not in extra
 
 
 # --------------------------------------------------------------------------- #

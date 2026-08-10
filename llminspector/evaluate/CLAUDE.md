@@ -32,10 +32,6 @@ helper, noted inline.
 **Availability filtering**: a metric whose `required_inputs` aren't present on a
 row is skipped for that row (scored `None`), not an error.
 
-**`answer_correctness` auto-adds its dependencies** (faithfulness,
-answer_relevancy) and nulls them out afterwards if the caller didn't request
-them. Preserved from legacy.
-
 **Failures are collected, never raised.** Metric errors land on
 `EvaluationResult.errors` as `{"row": idx, "error": ...}`, sorted by row. A run
 with failures logs a warning and still returns a result.

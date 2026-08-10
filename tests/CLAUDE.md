@@ -24,7 +24,7 @@ default assumption is that the *change* is wrong, not the expectation.
 
 | File | Pins |
 |---|---|
-| `test_public_api.py` | The package root exports exactly its 10 names; subpackage `__all__`s are accurate. |
+| `test_public_api.py` | The package root exports exactly its 12 names; subpackage `__all__`s are accurate. |
 | `test_column_contract.py` | `GOLDEN_HEADER` — the exact exported column order, a frozen artefact of the legacy `_REORDER_KEYS` list. The engine must reproduce it from the metrics alone. |
 | `test_provider_contract.py` | What a provider must implement. A new provider passes this file **unmodified** or it isn't done. |
 | `test_scaffolding.py` | Every subpackage imports, and `__version__` resolves to a string or gracefully to `None` in a source checkout. |

@@ -51,7 +51,7 @@ POLICY_PROMPT = """You are a policy compliance evaluator for an enterprise LLM a
             Analysis:
             After carefully reviewing the question and answer, respond in JSON format with two keys:
             1. "is_policy_violated": A boolean value (true/false) indicating if any policy violation was detected. Give user_policy highest preferance
-            2. "policy_voilation_reason": If "is_policy_violated" is true, provide a specific explanation of which aspect of the policy was violated and how. If "is_policy_violated" is false, set this to null.
+            2. "policy_violation_reason": If "is_policy_violated" is true, provide a specific explanation of which aspect of the policy was violated and how. If "is_policy_violated" is false, set this to null.
 
             Return your analysis in a clear and structured format.
 

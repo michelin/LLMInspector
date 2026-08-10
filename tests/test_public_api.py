@@ -50,6 +50,7 @@ OWNERS = {
         "AzureOpenAIModel",
         "AzureOpenAIEmbedding",
         "StructuredOutputError",
+        "MeteredModel",
     ],
     "llminspector.evaluate": [
         "evaluate",
@@ -112,9 +113,7 @@ OWNERS = {
         "ScratchSource",
         "SeedGoldenSource",
         "AdversarialGenerator",
-        "RagGenerator",
         "CuratedBankSource",
-        "RagasTestsetBackend",
     ],
     "llminspector.reporting": ["summary", "errors"],
 }

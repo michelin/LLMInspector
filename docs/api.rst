@@ -27,6 +27,9 @@ Models
 .. automodule:: llminspector.models.base_model
     :members:
 
+.. automodule:: llminspector.models.metered
+   :members:
+
 .. automodule:: llminspector.models.azure_openai
     :members:
 
@@ -78,10 +81,34 @@ Generation
 .. automodule:: llminspector.generation.config
     :members:
 
+.. automodule:: llminspector.generation.stages
+   :members:
+
+.. automodule:: llminspector.generation.context.chunking
+   :members:
+
+.. automodule:: llminspector.generation.context.index
+   :members:
+
+.. automodule:: llminspector.generation.context.loaders
+   :members:
+
+.. automodule:: llminspector.generation.context.selection
+   :members:
+
+.. automodule:: llminspector.generation.sources.documents
+   :members:
+
+.. automodule:: llminspector.generation.sources.scratch
+   :members:
+
+.. automodule:: llminspector.generation.sources.seed
+   :members:
+
 .. automodule:: llminspector.generation.adversarial
     :members:
 
-.. automodule:: llminspector.generation.rag
+.. automodule:: llminspector.generation.sources.contexts
     :members:
 
 .. automodule:: llminspector.generation.perturbations
