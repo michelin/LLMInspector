@@ -213,6 +213,57 @@ logs which it chose. It is never silent.
 pip install 'llminspector[faiss]'
 ```
 
+## Generating with no corpus at all
+
+`ScratchSource` writes inputs from a description of the setting:
+
+```python
+from llminspector.generation import ScratchSource, StylingConfig
+
+source = ScratchSource(
+    StylingConfig(
+        scenario="tyre retail support",
+        task="answer billing and delivery questions",
+        input_format="a short customer chat message",
+    ),
+    num_goldens=50,
+)
+```
+
+All three styling fields are required — without source material they are the
+only description the model has. Omit any and you get **one** error naming every
+missing field, not one per rerun.
+
+Nothing here is grounded, so there is no expected output by default. A reference
+answer invented without source material is not ground truth; it is a second
+opinion wearing ground truth's column name.
+
+Large runs are batched (10 inputs per call) and de-duplicated, since asking for
+hundreds in a single reply reliably degrades into near-duplicates.
+
+## Growing an existing set
+
+`SeedGoldenSource` produces more goldens in the vein of ones you already have:
+
+```python
+from llminspector.generation import SeedGoldenSource
+
+source = SeedGoldenSource(existing_goldens, max_per_golden=2)
+```
+
+Omit `styling` and it is **reverse-engineered** from up to ten seed inputs with
+one model call, so the augmented set sounds like the set it grew from rather than
+like the model's default register.
+
+Seeds are **partitioned**, not routed as a block: those carrying context go down
+the grounded path, those without go down the scratch path, and both run. Routing
+the whole batch on whether *any* seed has context — the obvious implementation —
+silently drops every context-free seed, so a mixed set returns fewer goldens than
+asked for with no indication why.
+
+Every generated golden carries `seed_id`, so an augmented set stays traceable to
+what it grew from.
+
 ## RAG
 
 Question / ground-truth / context triples generated from your documents, backed by `ragas`:

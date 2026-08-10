@@ -25,7 +25,7 @@ from ...utils.prompting import render_prompt
 from ..config import EvolutionConfig
 from ..stage import Stage, StageContext
 
-__all__ = ["EvolutionStage", "EvolvedInput", "STRATEGIES"]
+__all__ = ["EvolutionStage", "EvolvedInput", "STRATEGIES", "CONTEXT_STRATEGIES"]
 
 
 class EvolvedInput(BaseModel):
@@ -66,6 +66,11 @@ STRATEGIES: Dict[str, str] = {
         "implied by the circumstances rather than asked directly."
     ),
 }
+
+#: Strategies whose instruction refers to the source material, and which are
+#: therefore impossible without one. Dropped from the distribution for
+#: context-free goldens rather than picked and silently half-followed.
+CONTEXT_STRATEGIES = frozenset({"concretising", "comparative"})
 
 # The "still answerable using only the source material" clause is what makes
 # ``still_grounded`` meaningful; without it the model has no stated bar to
@@ -113,16 +118,33 @@ class EvolutionStage(Stage):
                 f"{unknown}. Valid strategies: {sorted(STRATEGIES)}"
             )
 
-    def _weights(self) -> Tuple[List[str], List[float]]:
+    def _weights(self, has_context: bool) -> Tuple[List[str], List[float]]:
         """The strategy names and their weights, uniform when unconfigured.
 
         Zero-weighted strategies are dropped rather than left in with weight 0,
         so ``random.choices`` cannot return one through floating-point noise.
+
+        Strategies that need source material are dropped when there is none, and
+        the remaining weights simply renormalise (``random.choices`` normalises
+        for us). A scratch-generated golden has no context, so asking a model to
+        "refer to a specific entity that appears in the source material" is an
+        instruction it cannot follow — the reference design picks such strategies
+        anyway and takes whatever comes back.
         """
         configured = {k: v for k, v in self.config.strategies.items() if v > 0}
         if not configured:
-            names = sorted(STRATEGIES)
-            return names, [1.0] * len(names)
+            configured = {name: 1.0 for name in STRATEGIES}
+        if not has_context:
+            configured = {
+                k: v for k, v in configured.items() if k not in CONTEXT_STRATEGIES
+            }
+        if not configured:
+            raise ValueError(
+                "No evolution strategy is possible: every configured strategy "
+                f"({sorted(CONTEXT_STRATEGIES)}) needs source material, and this "
+                "golden has none. Configure a context-free strategy such as "
+                f"{sorted(set(STRATEGIES) - CONTEXT_STRATEGIES)} instead."
+            )
         names = sorted(configured)
         return names, [configured[n] for n in names]
 
@@ -136,7 +158,8 @@ class EvolutionStage(Stage):
             return golden
 
         rng = self._rng(ctx.config.seed, golden.input)
-        names, weights = self._weights()
+        has_context = bool([c for c in ctx.context if c and c.strip()])
+        names, weights = self._weights(has_context)
         context = self._context_block(ctx.context)
 
         applied: List[str] = []

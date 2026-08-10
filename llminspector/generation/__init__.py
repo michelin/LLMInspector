@@ -24,7 +24,13 @@ from .config import (
 from .generator import GenerationResult, Generator
 from .rag import RagGenerator
 from .source import GoldenSource, SyncGoldenSource
-from .sources import ContextSource, CuratedBankSource, DocumentSource
+from .sources import (
+    ContextSource,
+    CuratedBankSource,
+    DocumentSource,
+    ScratchSource,
+    SeedGoldenSource,
+)
 from .sources.ragas_testset import RagasTestsetBackend
 from .stage import Stage, StageContext
 from .stages import (
@@ -62,6 +68,8 @@ __all__ = [
     "RagGenerator",
     "ContextSource",
     "DocumentSource",
+    "ScratchSource",
+    "SeedGoldenSource",
     "CuratedBankSource",
     "RagasTestsetBackend",
 ]

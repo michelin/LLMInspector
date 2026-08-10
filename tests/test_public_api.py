@@ -109,6 +109,8 @@ OWNERS = {
         "PerturbationStage",
         "ContextSource",
         "DocumentSource",
+        "ScratchSource",
+        "SeedGoldenSource",
         "AdversarialGenerator",
         "RagGenerator",
         "CuratedBankSource",
